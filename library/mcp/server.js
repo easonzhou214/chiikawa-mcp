@@ -16,9 +16,105 @@ const crypto = require("crypto");
 
 const PROTOCOL_VERSION = "2025-06-18";
 const SERVER_NAME = "chiikawa-archive";
-const SERVER_VERSION = "0.3.0";
+const SERVER_VERSION = "0.4.0";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
+
+/* ------------------------------------------------------------------ 世界词表 */
+
+// 这个世界的「有什么」——地点、营生、吃食、活动、规矩。
+// 人格层不写这份清单（写了就是常驻成本 + 两处维护），但没有它就没法即兴：
+// 不知道这世界里存在布丁和铠甲先生，编出来的东西会离题。
+//
+// 所以它放在按需层：只有真去查库的那几轮才带出来。
+// 词条不是文案，是**索引** —— 每个词下面压着库里的篇章与条目，来处写清楚，
+// 顺着它就能往下查。加一个新地点：改这里一处，不用碰人格、不用重装。
+const WORLD = {
+  note:
+    "乌萨奇所在世界的词汇索引。人格层不重复这份清单——即兴时按这里挑词，" +
+    "需要细节再按 kind + id 去查对应词条。列在这里的每一项在库中都有据可查；" +
+    "没列的东西不等于不存在，但先查再讲。",
+  places: [
+    { cn: "拉面店「郎」", id: "rou", kind: "arc", hint: "规矩硬到要练点单" },
+    { cn: "ラーメン「山」", id: "ramen-yama", kind: "arc", hint: "开在山顶，值得专门跑一趟" },
+    { cn: "涌出口", id: "waki", kind: "arc", hint: "食物与生活的来源之一，涸过一次" },
+    { cn: "洞穴", id: "hole", kind: "arc" },
+    { cn: "山", id: "yamanba", kind: "arc", hint: "山佬篇那片山" },
+    { cn: "二手书店", id: "furuhonya", kind: "character" },
+    { cn: "乌萨奇的家", id: "usagi-house", kind: "arc", hint: "它住哪一直没人知道" },
+  ],
+  food: [
+    { cn: "布丁", hint: "超级可口布丁、焦糖布丁，要攒钱买" },
+    { cn: "热松饼" },
+    { cn: "咖喱", id: "oni-curry", kind: "arc", hint: "魔鬼咖喱，辣到超出常识" },
+    { cn: "小猪杯面" },
+    { cn: "蛋包饭" },
+    { cn: "寿司" },
+    { cn: "幸运翻车鱼", id: "manbou", kind: "character", hint: "遇到它算今天运气不错" },
+  ],
+  work: [
+    { cn: "除草", hint: "最常见的营生" },
+    { cn: "讨伐", id: "tobatsu-anoko", kind: "arc", hint: "接任务打怪物，换报酬" },
+    { cn: "打工", hint: "餐厅、书店这类地方接活" },
+    { cn: "报酬", hint: "干活换来的钱，攒着买东西" },
+    { cn: "检定", id: "kusamushiri", kind: "arc", hint: "除草检定，考不过就得重来" },
+    { cn: "资格考试", id: "shisa-qual", kind: "arc" },
+    { cn: "排行榜", hint: "讨伐成绩会挂上去" },
+  ],
+  life: [
+    { cn: "铠甲先生", hint: "穿铠甲的从业者：手工、劳动、拉面、除草，还有老板" },
+    { cn: "睡衣派对仔", id: "pajama", kind: "arc", hint: "土豆祭上被抓走同伴的那个团" },
+    { cn: "三星餐厅", id: "three-star", kind: "arc" },
+    { cn: "照相机", id: "camera", kind: "arc" },
+    { cn: "开关", id: "switch", kind: "arc", hint: "捡回来的东西，越养越说不清是什么" },
+    { cn: "流星", id: "black-meteor", kind: "arc", hint: "墙上那些小星星，后期黑幕" },
+    { cn: "猜拳", hint: "常拿来决定事情" },
+  ],
+  people: [
+    { cn: "老师", hint: "下克上那条线：只看结果，努力是前提不是理由" },
+    { cn: "山佬", id: "yamanba", kind: "arc", hint: "认得他们，最后自己走回山里" },
+    { cn: "那孩子", id: "anoko", kind: "character" },
+    { cn: "大强", id: "dekatsuyo", kind: "character", hint: "名字叫又大又强，其实胆小善良" },
+    { cn: "奇美拉", id: "chimera", kind: "character" },
+    { cn: "魔女", id: "majo", kind: "character" },
+    { cn: "古本屋", id: "furuhonya", kind: "character" },
+  ],
+};
+
+// 词表是手写的索引，数据是会变的 —— 两者一旦脱节，模型就会照着不存在的设定编。
+// 所以每次装载都拿真实数据核一遍：cn 必须在库文里出现过，id 必须真能查到。
+// 只报不改，只报「有据可查」这一项；hint 是概述，不参与校验。
+function auditWorld(idx, archive) {
+  const arcs = new Set(archive.arcs.map((x) => x.id));
+  const chars = new Set(archive.characters.map((c) => c.id));
+  const hay = [
+    ...archive.arcs.map((x) => (x.cn || "") + (x.jp || "") + (x.summary || "")),
+    ...archive.characters.map((c) =>
+      (c.cn || "") + (c.jp || "") + (c.intro || "") + (c.line || "") +
+      (c.tags || []).join("") + (c.alias || []).join("")),
+    ...archive.episodes.flatMap((e) => [
+      e.cn || "", e.jp || "",
+      ...(e.sh || []).map((s) => (s.t || "") + (s.s || "") + (s.l || []).map((l) => l.x || "").join("")),
+    ]),
+  ].join(" ");
+
+  const problems = [];
+  for (const [cat, items] of Object.entries(WORLD)) {
+    if (cat === "note") continue;
+    for (const it of items) {
+      if (hay.indexOf(it.cn) < 0) {
+        problems.push("world." + cat + "「" + it.cn + "」在库文中 0 次，无法核实");
+      }
+      if (it.id) {
+        const pool = it.kind === "arc" ? arcs : chars;
+        if (!pool.has(it.id)) {
+          problems.push("world." + cat + "「" + it.cn + "」指向的 " + it.kind + " id「" + it.id + "」在库里不存在");
+        }
+      }
+    }
+  }
+  return problems;
+}
 
 /* ------------------------------------------------------------------ 装载 */
 
@@ -734,6 +830,7 @@ function tDescribe(idx, archive) {
   const chiikawaSplit = chiikawaChar
     ? characterEpisodes(idx, chiikawaChar)
     : { actedOnly: [], inferred: [] };
+  const worldProblems = auditWorld(idx, archive);
 
   return {
     server: SERVER_NAME,
@@ -749,6 +846,12 @@ function tDescribe(idx, archive) {
       arc: archive.arcs.length,
       line: idx.lineCount,
     },
+    // 人格层不写世界清单（常驻成本 + 两处维护），但即兴需要它 —— 放在这里按需带出。
+    // 它是索引不是文案：每个词都指向库里的条目，顺着能往下查。
+    world: WORLD,
+    world_check: worldProblems.length
+      ? { ok: false, problems: worldProblems }
+      : { ok: true, note: "世界词表的每一项都在库中有据可查" },
     fields: {
       "episodes[].id": "集号，1-345，连续无缺",
       "episodes[].jp / .cn": "日文原名 / 中文标题",
@@ -911,10 +1014,13 @@ function handle(line) {
           serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
           instructions:
             "《吉伊卡哇》只读资料库，仅用于作品内容查询。普通闲聊和技术任务不调用；" +
-            "本会话首次使用先调 describe_schema（工具，不是方法），已核实信息可复用。" +
+            "本会话首次使用先调 describe_schema（工具，不是方法）——它的返回里有 fields、known_gaps " +
+            "和 world（世界词汇索引，即兴时按它挑词）。已核实信息可复用。" +
             "自述类问题（问某角色自己的经历、日常、喜好、心情、打算）先查库再开口：" +
-            "库里有就顺着讲，没有可按库中已有的世界常识即兴补一段，但不与库中设定冲突、" +
-            "不引入库外事物、不给即兴内容安集号；查库过程不必播报。",
+            "库里有就顺着讲，没有可按世界常识即兴补一段，但不与库中设定冲突、" +
+            "不引入库外事物、不给即兴内容安话数；查库过程不必播报。" +
+            "本资料库是这套人格的前提：工具连不上时不要继续扮演角色或凭记忆作答，" +
+            "直接说明资料库未连接、作品内容暂时答不了；用户交办的实际任务不受影响。",
         });
         return;
       case "ping":
@@ -952,6 +1058,13 @@ function main() {
     "[" + SERVER_NAME + "] 已装载 " + archive.files.length + " 个文件 / " +
     archive.episodes.length + " 集 / " + index.shorts.length + " 短篇，版本 " + archive.version + "\n");
 
+  // 词表与数据脱节会让模型照着不存在的设定编，所以启动就说清楚。
+  // 走 stderr：stdout 只能有 JSON-RPC，写别的进去会让宿主解析失败。
+  const worldProblems = auditWorld(index, archive);
+  for (const p of worldProblems) {
+    process.stderr.write("[" + SERVER_NAME + "] 世界词表待修：" + p + "\n");
+  }
+
   let buf = "";
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", (chunk) => {
@@ -970,6 +1083,8 @@ function main() {
 if (process.argv.indexOf("--selftest") >= 0) {
   archive = loadArchive();
   index = buildIndex(archive);
+  const problems = auditWorld(index, archive);
+  for (const p of problems) process.stderr.write("[selftest] 世界词表待修：" + p + "\n");
   process.stdout.write(JSON.stringify(tDescribe(index, archive), null, 2) + "\n");
   process.exit(0);
 }
