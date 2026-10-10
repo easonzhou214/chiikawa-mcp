@@ -90,9 +90,9 @@ arcs      = CK.arcs
 启动时跑一次，索引建在内存里：
 
 - `byId`：集号 → 集、角色 id → 角色、篇章 id → 篇章
-- `arcIndex`：篇章 id → 集号集合（**从 `episodes[].a` 倒排**，别直接信 `arcs[].start/end`，两者要对账）
-- `charIndex`：角色 → 集号集合
-- `textIndex`：短篇概要 + 台词全文的可检索形式
+- `arcIndex`：篇章 id → 集号集合，**两个方向都要取**——`arcs[].start/end` 的区间，加上 `episodes[].a` 的倒排，合并成一个集合。单看任一边都会给出错的集数：只看 `a[]` 会漏掉区间内没回填的集，只看区间会漏掉呼应/回访集。装载时预计算一张「集 → 篇章」的反查表，之后每次调用都直接查表，不再重扫区间。
+- `charIndex`：角色 → 集号集合。**台词行与动作行要分开记**（`l[].k` 为 `t` / `a`）：两者都能证明「该集有它」，但只有台词能证明它开口了。合成一个数会让「出场集数」看起来远大于实际，且无法解释。
+- `textIndex`：集标题 + 短篇概要 + 台词的全文可检索形式
 
 ## 排序这条红线
 
@@ -128,9 +128,9 @@ arcs      = CK.arcs
 
 数据现状 7 个已知项列在 `../README.md`，与 `describe_schema()` 返回的 `known_gaps[].id` **一一对应**。讨论时请用 id 指代，不要用编号——编号在本项目漂过一次，是乌的报告问题。
 
-真正够得上「开工前该修」的只有一项：
+真正够得上「开工前该修」的那一项（`character-eps-is-subset`）**已经修好了**——不是靠改数据，是靠**把口径摊开**：`get_entry` / `get_related` 现在回 `declared` / `from_speaking` / `from_actions` 三个数，外加互斥拆分 `spoken_only` / `acted_only` / `both`。调用方一眼能看出「并集里有多少只是动作推出来的」，不会再把它当成「这些集它都说过话」。
 
-**`character-eps-is-subset`** —— 角色出场集数是抽样，会直接答错。30 个角色里 11 个受影响，例如吉伊卡哇声明 9 集、台词可推出 296 集。
+`arc-fk-missing` 则从数据侧修掉了：第 214 集补 `black-meteor`、第 342 集补 `ramen-yama`，现为 0 集。但**服务层那条「区间 ∪ 反查」不能因此删掉**（见上），它是语义要求，不是数据补丁。
 
 其余各项的处置：
 
@@ -138,5 +138,5 @@ arcs      = CK.arcs
 |---|---|
 | `load-order-trap` | 已由装载层处理，消费者无需额外动作 |
 | `arc-link-not-inverse` | 不是数据问题，是语义要用对：取并集，别拿单边当真值 |
-| `arc-fk-missing` | 只有 2 集漏回填，影响面小 |
-| `duplicate-lines` / `short-summaries` / `unmatched-speakers` | 影响答案质量，不影响正确性 |
+| `arc-fk-missing` | 已补数据；服务层仍取并集 |
+| `duplicate-lines` / `short-summaries` / `unmatched-speakers` | 影响答案质量，不影响正确性。未登记说话人现在会连同所在集号一起返回，可直接定位去补 |
