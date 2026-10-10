@@ -320,18 +320,41 @@ mark{background:#FFE9A8;color:var(--ink);padding:0 3px;border-radius:4px}
 /* 引用的原文有两类，分两种处理 —— 关键区别是「行结构有没有意义」：
    · 整段中文（服务握手说明）：行是排版断出来的，折成一段读着舒服 → 普通段落
    · markdown / 带行的文本（注入的 agent 正文）：行是作者写的，压掉就看不出结构
-     → 保留换行，但同时允许自动折行，别退回到「要左右拖」那个毛病
-   两种都不用横向滚动。 */
-.prose .quote{
-  background:var(--cream-2);border-left:3px solid var(--pink-deep);border-radius:0 var(--r) var(--r) 0;
-  padding:13px 16px;margin:12px 0;font-size:13.5px;line-height:1.9;color:var(--ink-2);
+     → 保留换行，但同时允许自动折行
+   两种都不用横向滚动。
+
+   配色走过一次弯路：原来是浅底 + --ink-2 文字，对比度 4.87:1 —— 单看是过了
+   WCAG AA 的，但同一页里的代码块是 12.74:1，摆在一起就显得糊。现在统一用
+   深底浅字（11.34:1）。
+
+   为了不让人again 误以为是代码，和代码块刻意留了三处不同：
+   1) 底色是暖调的深灰，不是代码块那种冷调；
+   2) 字体是正文字体，不是等宽；
+   3) 左边一条浅粉竖线 + 角上一行小标签，标明这是引用的原文。 */
+.prose .quote,
+.prose pre.quote-wrap{
+  position:relative;
+  background:#332E2A;color:#FFE9C9;
+  border-left:3px solid #FFD3E1;border-radius:0 var(--r) var(--r) 0;
+  padding:15px 18px 15px 20px;margin:20px 0 14px;
+  font-size:13.5px;line-height:1.85;
   white-space:normal;overflow-wrap:anywhere;
 }
-.prose pre.quote-wrap{
-  background:var(--cream-2);color:var(--ink-2);white-space:pre-wrap;
-  overflow-wrap:anywhere;font-size:13.5px;line-height:1.85;letter-spacing:normal;
+.prose pre.quote-wrap{white-space:pre-wrap;letter-spacing:normal}
+.prose pre.quote-wrap code{white-space:pre-wrap;color:inherit}
+/* 角上的小标签，说明这段是什么 */
+.prose .quote::before,
+.prose pre.quote-wrap::before{
+  content:attr(data-label);
+  position:absolute;top:-10px;left:12px;
+  /* 浅粉底 + 深字：自身 10:1，和深色块边缘也拉开 10:1。
+     一开始用的粉底白字只有 3.13:1，小字号下等于没有。 */
+  background:var(--pink-2);color:#332E2A;
+  font-size:10.5px;line-height:1;padding:3px 8px;border-radius:var(--r-full);
+  letter-spacing:.3px;
 }
-.prose pre.quote-wrap code{white-space:pre-wrap}
+.prose .quote:not([data-label])::before,
+.prose pre.quote-wrap:not([data-label])::before{display:none}
 /* 接口签名一类的行内代码不要折行 —— 折了之后
    list_entries(kind, filter?, offset?, limit?) 会断成两半，很难读。
    表格里空间不够时让这一格自己撑宽，而不是把签名切开。 */
