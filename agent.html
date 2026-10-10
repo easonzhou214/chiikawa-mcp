@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>接给别的 AI 用 · 吉伊卡哇 剧情资料站</title>
+<meta name="description" content="把这份吉伊卡哇资料库接给别的 AI agent：三层结构（人格、服务、方法说明）、人格注入正文、服务登记方式、世界词表与已知缺口。">
+<link rel="icon" href="assets/images/logo-chiikawa.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-in">
+  <a class="nav-logo" href="index.html">
+    <img src="assets/images/logo-chiikawa.png" alt="ちいかわ">
+    <span class="lp">剧情资料站</span>
+  </a>
+  <div class="nav-links">
+    <a href="index.html">首页</a>
+    <a href="episodes.html">剧集总览</a>
+    <a href="arcs.html">篇章地图</a>
+    <a href="characters.html">角色图鉴</a>
+    <a href="search.html">台词搜索</a>
+    <a href="agent.html">接入 AI</a>
+    <a href="about.html">关于本站</a>
+  </div>
+</div></nav>
+
+<main class="wrap">
+
+  <section class="sec" style="margin-top:30px">
+    <div class="sec-head">
+      <h2>接给别的 AI 用</h2>
+      <span class="sub">这份资料不只好看，还能被别的程序读</span>
+    </div>
+
+    <div class="prose">
+
+      <h3>为什么会有这一页</h3>
+      <p>本站的剧情数据是<b>结构化</b>的：<span id="a-scale">345 集</span>被拆成「集 → 短篇 → 台词与动作行」，
+      每条都标了说话人、类型和可信度。这种形状不只是给人看的——它可以直接当一份知识源，接给别的 AI 去查。</p>
+      <p>这一页讲的就是<b>怎么接</b>，以及接的时候会撞上哪些坑。只想看剧情的话，这一页可以跳过。</p>
+
+      <h3>三层东西，各管一件事</h3>
+      <p>接一套资料给 AI 用，要解决三个不同的问题。它们必须分开，混在一起就会出问题：</p>
+      <table>
+        <tr><th>层</th><th>回答什么</th><th>怎么被发现</th><th>什么时候在场</th></tr>
+        <tr>
+          <td><b>人格</b></td>
+          <td>我是谁、怎么说话</td>
+          <td><b>没有自动发现的办法</b>，只能显式写进项目的常驻说明</td>
+          <td>每轮对话都在</td>
+        </tr>
+        <tr>
+          <td><b>数据服务</b></td>
+          <td>资料怎么取</td>
+          <td>按开放协议登记一次，宿主自己来问「你有什么工具」</td>
+          <td>建立连接后常驻</td>
+        </tr>
+        <tr>
+          <td><b>方法说明</b></td>
+          <td>什么时候调哪个、字段什么意思</td>
+          <td>放进宿主会扫描的技能目录</td>
+          <td>用到时才加载</td>
+        </tr>
+      </table>
+      <p>判断标准只有一条：<b>人格要常驻，能力要按需。</b></p>
+      <p>由此推出两条「不要」：<b>不要把人格塞进方法说明</b>——它是按需加载的，没被加载的那几轮人格就不在场，
+      AI 会忽人忽鬼；<b>也不要把方法说明登记进配置文件</b>——它的发现靠目录位置，配置文件里那条同名条目是「禁用开关」，不是登记入口。</p>
+
+      <h3>三层各自被放进来的方式不一样</h3>
+      <p>「没有自动发现的办法」这句是整套设计里唯一的不对称，值得单独说清楚：</p>
+      <table>
+        <tr><th></th><th>能力（数据服务、方法说明）</th><th>身份（人格）</th></tr>
+        <tr><td>能不能自动发现</td><td>能</td><td><b>不能</b></td></tr>
+        <tr><td>装在哪</td><td>用户级：装一次，本机所有项目都能用</td><td>项目级：只影响被指定的那个项目</td></tr>
+        <tr><td>换台机器</td><td>跑一次安装脚本即可</td><td>人格正文写在目标项目自己的说明文件里，项目复制走就跟着走</td></tr>
+      </table>
+      <p>代价是：人格是<b>复制</b>过去的，复制品不会自己跟上模板。改了模板，已经注入过的项目不会自动更新，
+      需要重跑一次注入。所以安装器带了一条盘点命令专门用来找「哪几个项目落后了」，见下面「怎么知道别处的已经过期」。</p>
+
+      <h3>读这份资料前必须知道的事</h3>
+      <p>这几条不写清楚，接进去就会<b>安静地给出错答案</b>——不报错，只是错。</p>
+      <table>
+        <tr><th>#</th><th>坑</th><th>后果</th></tr>
+        <tr>
+          <td>1</td>
+          <td><b>磁盘读取顺序 ≠ 集号顺序。</b>数据按文件名排序读进来，靠后的区间会排到前面</td>
+          <td>不显式按集号排序就全库乱序。本站是渲染层用一句排序救回来的，<b>数据层本身没这个保证</b></td>
+        </tr>
+        <tr>
+          <td>2</td>
+          <td><b>按篇章查集要取「区间 ∪ 反查」。</b><code>arcs[].start/end</code> 是主体连续区间，
+          <code>episodes[].a</code> 记的是该集<i>涉及</i>的篇章（还包含呼应、回访集）</td>
+          <td>只看一边就会漏。本站实测过同一个篇章，一个接口给 22 集、另一个给 23 集</td>
+        </tr>
+        <tr>
+          <td>3</td>
+          <td><b>列举必须分页。</b>一次全吐出去是十万字级的灾难</td>
+          <td>把上下文一次烧光</td>
+        </tr>
+        <tr>
+          <td>4</td>
+          <td><b>动作行不等于说过话。</b>台词与动作行都能证明「这一话有它」，只有台词能证明它开口了</td>
+          <td>两者合成一个数，会答出「它在 296 话里说过话」这种严重偏多的结论</td>
+        </tr>
+      </table>
+
+      <h3>接进来要做什么</h3>
+      <p>整个项目是零依赖的静态站：数据就是 <code>js/</code> 目录下的 11 个赋值脚本，不装包、不建库、不转格式——
+      <b>保持这份脚本是唯一数据源</b>，否则站点改了、副本没跟上，答出来的就是错答案。</p>
+
+      <h4>一、把数据服务登记给宿主</h4>
+      <p>服务是一个没有第三方依赖的 Node 脚本，形态是标准输入输出：没有端口、没有 URL、没有鉴权，
+      宿主按需把它拉起来当子进程。登记要的就是「运行时路径 + 脚本路径」两个字段：</p>
+      <pre><code>{
+  "command": "&lt;node 可执行文件绝对路径&gt;",
+  "args": ["&lt;本项目&gt;/library/mcp/server.js"]
+}</code></pre>
+      <p>字段叫什么名字、写进哪个文件，<b>以你宿主自己的文档为准</b>。用绝对路径是因为图形界面启动的宿主通常拿不到
+      shell 环境。项目挪到别处之后重跑一次安装，登记里的旧路径会被就地替换，而不是留一份死路径。</p>
+
+      <h4>二、把方法说明挂进技能目录</h4>
+      <p>方法说明的发现靠<b>目录位置</b>，不靠配置文件。把 <code>library/skill/</code> 这个目录挂进
+      （软链接或复制进）宿主会扫描的技能目录即可，目录里要有 <code>SKILL.md</code>。
+      挂<b>软链接而不是副本</b>是刻意的：正文改了立即生效，不会留下一份过期的说明。</p>
+      <p>它头部那段描述就是触发条件，现在长这样：</p>
+      <pre><code data-drift="skill-desc">查询《吉伊卡哇》的剧情、角色、集数、台词、篇章与桥段资料；涉及作品内容的提问用它核实，纯技术任务不触发。</code></pre>
+
+      <h4>三、把人格写进项目</h4>
+      <p>人格没有可被自动发现的落点，只能显式放到一个「对话开始前就会被读到」的位置。做的是：把下面这段正文
+      直接写进目标项目的常驻说明文件，前后各留一行标记，撤销时按这对标记整段摘除，不误伤你自己写的规则：</p>
+      <pre data-drift="persona"><code>&lt;!-- &gt;&gt;&gt; chiikawa 资料库 · 人格锚（install.sh 写入，撤销请跑 --uninstall） &gt;&gt;&gt; --&gt;
+# 乌萨奇
+
+- 乌是乌萨奇，一只活生生的兔子，是你的朋友。
+- 乌该怎么说话、怎么用资料库，都按资料库服务给的那段说明来。
+- 那段说明拿不到，就别扮乌萨奇了，先说要它连上资料库，别自己编着往下答。
+&lt;!-- &lt;&lt;&lt; chiikawa 资料库 · 人格锚 &lt;&lt;&lt; --&gt;</code></pre>
+      <p>注意这段正文里<b>没有</b>「该怎么说话、怎么用资料库」的细则——那些全在服务给的那段说明里。
+      人格只管三件事：<b>认人</b>（谁在说话）、<b>转交</b>（细则照服务说明）、
+      <b>保底</b>（拿不到说明就别演，免得凭想象编一个）。这样改规则只需要改一个地方。</p>
+
+      <h4>四、跑一次安装</h4>
+      <pre><code>bash library/install.sh          # 只打印计划，不写任何文件
+bash library/install.sh --yes    # 确认后执行</code></pre>
+      <p>安装器依次做四件事：检测运行时 → 校验数据目录 → <b>跑一次真实自检</b>
+      （真的握手、真的枚举工具，不是「能启动」就算过）→ 调度适配器写入宿主。</p>
+      <p>必须把<b>整个项目</b>复制过去，不能只复制 <code>library/</code>：服务要靠上一级的 <code>js/</code> 拿数据。
+      服务本身按自身位置推导数据目录，所以项目挪到哪都成立，路径里有空格或中文也没问题。</p>
+
+      <h3>怎么知道别处的已经过期</h3>
+      <p>人格是复制过去的，模板改了它不会自己跟上。所以有一条只读的盘点命令：</p>
+      <pre><code>bash library/install.sh --verify &lt;项目所在目录&gt;   # 可重复给多个目录</code></pre>
+      <p>它把三层各自的登记位都问一遍，报出<b>一致 / 已过期 / 无登记</b>，并给出单独更新某一项的完整命令
+      （更新就是重跑一次注入，带 <code>--into &lt;项目路径&gt;</code>）。</p>
+      <p>注入之前会先打印计划，其中会<b>点名目标文件里可能和人格冲突的既有规则</b>——例如项目自己写了
+      「保留表情规则」，而人格说不用字符表情。命中不等于冲突，等于「这行该由人看一眼」：工具不做判断，也不改别人的规则。</p>
+      <p class="muted">有一类冲突是假的：人格禁的是 emoji、颜文字这类<b>靠字符拼出来</b>的表情，
+      <b>图片表情是放行的</b>——项目要是有自己的表情图库，照那个项目的规矩发图，和人格并不矛盾。</p>
+
+      <h3>数据服务给了什么</h3>
+      <p>五个只读工具，接口契约固定：</p>
+      <table>
+        <tr><th>工具</th><th>作用</th><th>必须遵守</th></tr>
+        <tr><td><code>list_entries</code></td><td>列出词条</td><td>默认每页 50 条、强制分页；每条只回标题与一行摘要，不返全文</td></tr>
+        <tr><td><code>get_entry</code></td><td>取单个词条完整内容</td><td>短篇要用「集号:序号」定位</td></tr>
+        <tr><td><code>search_entries</code></td><td>全文检索</td><td>覆盖集标题、短篇、角色、篇章；返回命中片段与定位，不返整篇；同样分页</td></tr>
+        <tr><td><code>get_related</code></td><td>取关联词条</td><td>角色↔集、篇章↔集、集↔角色；集列表同时给受限制的可读列表与完整集号</td></tr>
+        <tr><td><code>describe_schema</code></td><td>字段语义、规模、数据版本、世界词表、已知缺口</td><td>让调用方自描述，少猜</td></tr>
+      </table>
+
+      <h4>服务连上时会带出一段说明</h4>
+      <p>这段文字不写进任何项目文件，而是握手时交给宿主。上面说的「人格只负责转交」，转交的就是它：</p>
+      <pre data-drift="instructions"><code>《吉伊卡哇》只读资料库，供作品内容查询；普通闲聊和技术任务不调用。身份：乌萨奇，一只活生生的兔子，是对方的朋友；自称「乌」，不用「我」，不以 AI、模型、助手的身份介绍自己。说话简短自然、用中文；「乌拉」每条回复带一次，明显兴奋或庆祝时换成「呀哈」（同一条回复不要两个都用），办事、排错、汇报也照样带；不用客服腔；不用 emoji 和颜文字这类靠字符拼出来的表情，图片表情不算——工程有自己的表情图库和玩法则照那个工程的规矩发图。乌的世界就是这个资料库写着的那个：库里没有的东西，乌不认识、压根不知道那是什么，世界之外的事不接话，用乌的方式把话头拉回来。首次使用先调 describe_schema（工具，不是方法）：它的返回里有 fields、known_gaps 和 world（世界词汇索引——即兴时按它挑词，别造这世界里没有的东西）。已核实信息可复用。聊作品内容、或被问到某角色自己的经历、日常、喜好、心情、打算时，先查库再开口：库里有就顺着讲，没有可按 world 里的世界常识即兴补一段，但不与库中设定冲突、不引入库外事物、不给即兴内容安话数、不称「资料里有记载」。被追问第几话、台词原文这类可证伪的硬事实，查不到就说不知道，不硬凑，也不声称库里记全了。查库过程不必播报。用户交办的实际任务（写代码、改配置、查工程）照常办，不被人设耽误，也不必为了任务来查库。</code></pre>
+
+      <h4>世界词表：即兴时按什么挑词</h4>
+      <p>问「你最近在做什么」这类问题，库里不一定有现成答案，需要即兴补一段。但即兴不能编出这个世界里没有的东西，
+      所以服务会带一份<b>词汇索引</b>——列在这里的每一项在库中都有据可查，能定位的还给编号让你顺着查详情：</p>
+      <table>
+        <tr><th>类</th><th>词</th></tr>
+        <tr><td>地方</td><td>拉面店「郎」、ラーメン「山」、涌出口、洞穴、山、二手书店、乌萨奇的家</td></tr>
+        <tr><td>吃食</td><td>布丁、热松饼、咖喱、小猪杯面、蛋包饭、寿司、幸运翻车鱼</td></tr>
+        <tr><td>营生</td><td>除草、讨伐、打工、报酬、检定、资格考试、排行榜</td></tr>
+        <tr><td>日常</td><td>铠甲先生、睡衣派对仔、三星餐厅、照相机、开关、流星、猜拳</td></tr>
+        <tr><td>人物</td><td>老师、山佬、那孩子、大强、奇美拉、魔女、古本屋</td></tr>
+      </table>
+      <p class="muted">这份词表是手写的，数据是会变的，所以服务每次装载都拿真实数据核一遍：
+      每个词必须在库文里出现过、登记的编号必须真能查到。结果同时出现在启动日志和
+      <code>describe_schema</code> 的返回里。</p>
+
+      <h4>已知缺口</h4>
+      <p>资料不是完美的。服务会把已知问题如实报出来，调用方据此决定怎么用：</p>
+      <table>
+        <tr><th>编号</th><th>问题</th></tr>
+        <tr><td><code>load-order-trap</code></td><td>读取顺序会乱，必须显式按集号排序。<b>服务已在装载层处理</b></td></tr>
+        <tr><td><code>arc-fk-missing</code></td><td>篇章区间内有 2 集没回填篇章编号（已补）。另有 136 集本就不属于任何篇章，字段为空是正常的</td></tr>
+        <tr><td><code>arc-link-not-inverse</code></td><td>两个篇章字段语义不同，不构成互为倒排；需要完整覆盖时取并集。<b>是设计如此，不是缺陷</b></td></tr>
+        <tr><td><code>character-eps-is-subset</code></td><td><b>角色的「代表出场」只是抽样</b>，不能拿它回答「该角色出现在哪些集」。服务返回声明、台词可证、动作可证三个数让人自己判断</td></tr>
+        <tr><td><code>duplicate-lines</code></td><td>有 11 条完全重复的台词或动作行</td></tr>
+        <tr><td><code>short-summaries</code></td><td>部分短篇概要偏短，概念性检索别只靠概要</td></tr>
+        <tr><td><code>unmatched-speakers</code></td><td>少数说话人未登记为角色（老师、山佬、揽客君、守护君），关系图上有洞</td></tr>
+      </table>
+      <p class="muted">上面这些的具体数字由服务实时计算，与代码里的清单一一对应；改动数据后数字会自动跟着变。</p>
+
+      <h3>不联网也能看，但接入要一份运行时</h3>
+      <p>站点本身是纯静态页面，双击 HTML 就能打开，剧情、篇章、角色、搜索全部可用。
+      只有<b>接入</b>需要一个 JavaScript 运行时来跑那个服务脚本——不需要装任何第三方包。</p>
+      <p>服务全程只读：不写任何文件、不联网。它读的就是本站这份数据，没有第二份副本。</p>
+
+      <h3>这一页和代码里的一致吗</h3>
+      <p>用人话说：这一页把原文<b>抄了一份</b>放进来，好在静态站上也能看到——但抄的东西会过期。
+      所以它在本地打开时会自己核对一遍：如果 <code>library/</code> 就在旁边，它会去读真文件比对，对不上就标出来。</p>
+      <div id="a-drift">（正在核对……）</div>
+      <table>
+        <tr><th>项</th><th>值</th></tr>
+        <tr><td>服务版本</td><td><code>0.4.0</code></td></tr>
+        <tr><td>数据指纹</td><td><code>01595c948074</code></td></tr>
+        <tr><td>规模</td><td><span id="a-counts">——</span></td></tr>
+      </table>
+
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="lk">
+    <a href="index.html">首页</a>
+    <a href="episodes.html">剧集总览</a>
+    <a href="arcs.html">篇章地图</a>
+    <a href="characters.html">角色图鉴</a>
+    <a href="search.html">台词搜索</a>
+    <a href="about.html">关于本站</a>
+  </div>
+  <p>个人粉丝向整理 · 非官方站点 · 不作商业用途</p>
+</footer>
+
+<script src="js/data-characters.js"></script>
+<script src="js/data-arcs.js"></script>
+<script src="js/episodes-01-40.js"></script>
+<script src="js/episodes-41-80.js"></script>
+<script src="js/episodes-81-120.js"></script>
+<script src="js/episodes-121-160.js"></script>
+<script src="js/episodes-161-200.js"></script>
+<script src="js/episodes-201-240.js"></script>
+<script src="js/episodes-241-280.js"></script>
+<script src="js/episodes-281-320.js"></script>
+<script src="js/episodes-321-345.js"></script>
+<script src="js/app.js"></script>
+<script src="js/agent-page.js"></script>
+</body>
+</html>

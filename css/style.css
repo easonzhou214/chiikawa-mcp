@@ -288,6 +288,16 @@ img{max-width:100%;display:block}
 .prose th,.prose td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
 .prose th{color:var(--ink-3);font-weight:500;background:var(--cream)}
 .prose code{background:var(--cream-2);padding:1px 6px;border-radius:5px;font-size:13px}
+/* 代码块：等宽、可横向滚动。接管线的说明里有长命令和长 JSON，
+   不给它溢出控制就会把版面撑破。 */
+.prose pre{
+  background:#2B2724;color:#F3EDE6;border-radius:var(--r);padding:15px 17px;margin:14px 0;
+  overflow-x:auto;font-size:12.5px;line-height:1.75;letter-spacing:.1px;
+  -webkit-overflow-scrolling:touch;
+}
+.prose pre code{background:none;padding:0;color:inherit;font-size:inherit;white-space:pre}
+.prose h4{margin:18px 0 8px;font-size:15px;color:var(--ink)}
+.prose p{margin:9px 0}
 
 /* ============ 页脚 ============ */
 footer{
