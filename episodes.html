@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>剧集总览 · 吉伊卡哇 剧情资料站</title>
+<meta name="description" content="《吉伊卡哇》第 1–345 话逐话剧情与台词记录，可按季度、篇章、可信度筛选，每话展开看短篇概要与角色台词。">
 <link rel="icon" href="assets/images/logo-chiikawa.png">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -38,14 +39,18 @@
     </p>
 
     <div class="filters">
+      <label class="vh" for="q">搜索</label>
       <input type="search" id="q" placeholder="搜标题、剧情或台词里的词……">
+      <label class="vh" for="f-season">季度</label>
       <select id="f-season">
         <option value="all">全部季度</option>
         <option value="1">中文版第一季（1–120）</option>
         <option value="2">中文版第二季（121–240）</option>
-        <option value="3">中文版未覆盖（241–345）</option>
+        <option value="3">中文版未覆盖（241 以后）</option>
       </select>
+      <label class="vh" for="f-arc">篇章</label>
       <select id="f-arc"><option value="all">全部篇章</option></select>
+      <label class="vh" for="f-conf">可信度</label>
       <select id="f-conf">
         <option value="all">全部可信度</option>
         <option value="A">只看 A 级</option>
@@ -53,24 +58,26 @@
       </select>
     </div>
 
-    <div class="chip-row">
-      <span class="chip on" data-arc="all">全部</span>
-      <span class="chip" data-arc="kusamushiri">除草检定篇</span>
-      <span class="chip" data-arc="ribbon">被表扬的丝带篇</span>
-      <span class="chip" data-arc="pajama">睡衣派对篇</span>
-      <span class="chip" data-arc="black-meteor">黑色流星篇</span>
-      <span class="chip" data-arc="shisa-qual">狮萨的资格证篇</span>
-      <span class="chip" data-arc="waki">涌出口篇</span>
-      <span class="chip" data-arc="hirogari">拾魔篇</span>
-      <span class="chip" data-arc="yamanba">山佬篇</span>
-      <span class="chip" data-arc="gekokujo">下克上与老师</span>
-      <span class="chip" data-arc="switch">开关·新朋友篇</span>
-      <span class="chip" data-arc="three-star">三星餐厅篇</span>
-      <span class="chip" data-arc="hole">洞穴篇</span>
-      <span class="chip" data-arc="camera">照相机篇</span>
+    <!-- 这些原来是 span，只有 click 监听：键盘和读屏都按不到。
+         换成 button 之后回车、空格、Tab 全都自动可用。 -->
+    <div class="chip-row" role="group" aria-label="按篇章快速筛选">
+      <button type="button" class="chip on" data-arc="all">全部</button>
+      <button type="button" class="chip" data-arc="kusamushiri">除草检定篇</button>
+      <button type="button" class="chip" data-arc="ribbon">被表扬的丝带篇</button>
+      <button type="button" class="chip" data-arc="pajama">睡衣派对篇</button>
+      <button type="button" class="chip" data-arc="black-meteor">黑色流星篇</button>
+      <button type="button" class="chip" data-arc="shisa-qual">狮萨的资格证篇</button>
+      <button type="button" class="chip" data-arc="waki">涌出口篇</button>
+      <button type="button" class="chip" data-arc="hirogari">拾魔篇</button>
+      <button type="button" class="chip" data-arc="yamanba">山佬篇</button>
+      <button type="button" class="chip" data-arc="gekokujo">下克上与老师</button>
+      <button type="button" class="chip" data-arc="switch">开关·新朋友篇</button>
+      <button type="button" class="chip" data-arc="three-star">三星餐厅篇</button>
+      <button type="button" class="chip" data-arc="hole">洞穴篇</button>
+      <button type="button" class="chip" data-arc="camera">照相机篇</button>
     </div>
 
-    <div class="res-count" id="res-count"></div>
+    <div class="res-count" id="res-count" role="status" aria-live="polite"></div>
     <div class="ep-list" id="ep-list"></div>
   </section>
 

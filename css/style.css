@@ -91,7 +91,7 @@ img{max-width:100%;display:block}
 .hero-txt h1 em{font-style:normal;color:var(--pink-deep)}
 .hero-txt p{margin:0 0 20px;color:var(--ink-2);font-size:15px}
 .hero-logo{height:46px;width:auto;border-radius:11px;margin-bottom:16px;box-shadow:0 4px 12px rgba(216,135,178,.34)}
-.hero-art{position:relative}
+.hero-art{position:relative;overflow:hidden}
 .hero-art .kv{
   width:100%;border-radius:var(--r-lg);box-shadow:var(--shadow-lg);
   animation:bob 4.6s ease-in-out infinite;
@@ -133,6 +133,7 @@ img{max-width:100%;display:block}
 }
 .today .lab{font-size:12.5px;color:var(--pink-dark);letter-spacing:.08em;font-weight:500}
 .today h3{margin:6px 0 8px;font-size:20px}
+.today h2{margin:6px 0 8px;font-size:20px}
 .today p{margin:0;color:var(--ink-2);font-size:14px;position:relative;z-index:1}
 .today .acts{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;position:relative;z-index:1}
 
@@ -151,9 +152,26 @@ img{max-width:100%;display:block}
 .chip{
   padding:6px 14px;border-radius:var(--r-full);font-size:13px;background:var(--white);
   color:var(--ink-2);border:1px solid var(--line);cursor:pointer;transition:.16s;
+  /* chip 现在是 <button>（原来只有 click 监听的 <span>，键盘按不到）。
+     button 自带字体、行高、内外边距与边框，这里逐项压掉，保持原外观。 */
+  font-family:inherit;line-height:inherit;margin:0;appearance:none;-webkit-appearance:none;
 }
 .chip:hover{border-color:var(--pink-2);color:var(--pink-dark)}
 .chip.on{background:var(--pink-deep);color:#fff;border-color:var(--pink-deep)}
+.chip:focus-visible{outline:2px solid var(--pink-deep);outline-offset:2px}
+
+/* 首页「关于这部动画」那张卡片：原来是内联的 grid-template-columns。
+   内联样式优先级高于媒体查询，窄屏压不回单列（实测 375px 下仍是两列，
+   配图被挤到 126px 宽）。改成类，交给下面的断点处理。 */
+.about-card{display:grid;grid-template-columns:1fr 1.1fr;gap:26px;align-items:center}
+
+/* 视觉上隐藏，但读屏和键盘焦点仍然拿得到。
+   给只有 placeholder 的输入框补 label 用 —— placeholder 不是字段名，
+   读屏不认它，而且一输入就消失了。 */
+.vh{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;
+}
 
 .ep-list{display:flex;flex-direction:column;gap:12px}
 .ep{
@@ -183,6 +201,7 @@ img{max-width:100%;display:block}
 .short:last-child{border-bottom:none}
 .short-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px}
 .short-head h4{margin:0;font-size:15px;color:var(--pink-dark)}
+.short-head h3{margin:0;font-size:15px;color:var(--pink-dark)}
 .short p{margin:0 0 12px;font-size:14.2px;color:var(--ink-2);line-height:1.85}
 .lines{background:var(--cream-2);border-radius:var(--r-sm);padding:12px 14px;margin-top:2px}
 .lines .lt{font-size:12px;color:var(--ink-3);margin-bottom:7px;letter-spacing:.05em}
@@ -275,7 +294,9 @@ img{max-width:100%;display:block}
 .hit .h-top{font-size:13px;color:var(--ink-3);margin-bottom:5px}
 .hit .h-top b{color:var(--pink-dark);font-weight:500}
 .hit .h-body{font-size:14.5px;line-height:1.8}
-.hit mark{background:#FFE9A8;color:var(--ink);padding:0 3px;border-radius:4px}
+/* 原来只有 .hit mark 有样式，剧集页的高亮退化成浏览器默认的纯黄。
+   两处高亮提成公共规则，颜色一致。 */
+mark{background:#FFE9A8;color:var(--ink);padding:0 3px;border-radius:4px}
 .res-count{font-size:13.5px;color:var(--ink-3);margin-bottom:14px}
 
 /* ============ 关于 ============ */
@@ -316,6 +337,7 @@ footer .lk a:hover{color:var(--pink-deep)}
   .stats{grid-template-columns:repeat(2,1fr)}
   .hero-txt h1{font-size:27px}
   .char-detail .top{grid-template-columns:1fr}
+  .about-card{grid-template-columns:1fr;gap:18px}
 }
 @media (max-width:600px){
   .entries,.chars{grid-template-columns:1fr}
