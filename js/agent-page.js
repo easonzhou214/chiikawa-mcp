@@ -24,10 +24,13 @@
     return stripWrap(s).replace(/[""]/g, "").replace(/\r\n?/g, "\n").replace(/\s+/g, " ").trim();
   }
 
+  // 取页面里那段的文本。可能是 <pre><code>（命令、配置），
+  // 也可能是会换行的 <p class="quote">（大段中文），两种都取 textContent。
   function embedded(key) {
     var node = document.querySelector('[data-drift="' + key + '"]');
     if (!node) return null;
-    return node.tagName === "PRE" ? (node.querySelector("code") || node).textContent : node.textContent;
+    var code = node.querySelector("code");
+    return (code || node).textContent;
   }
 
   // 每一段过了 scope 之后，两侧剩下的处理完全一样 ——
