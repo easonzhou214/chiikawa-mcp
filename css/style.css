@@ -317,6 +317,11 @@ mark{background:#FFE9A8;color:var(--ink);padding:0 3px;border-radius:4px}
   -webkit-overflow-scrolling:touch;
 }
 .prose pre code{background:none;padding:0;color:inherit;font-size:inherit;white-space:pre}
+/* 接口签名一类的行内代码不要折行 —— 折了之后
+   list_entries(kind, filter?, offset?, limit?) 会断成两半，很难读。
+   表格里空间不够时让这一格自己撑宽，而不是把签名切开。 */
+.prose td code{white-space:nowrap}
+.prose table{table-layout:auto}
 .prose h4{margin:18px 0 8px;font-size:15px;color:var(--ink)}
 .prose p{margin:9px 0}
 
