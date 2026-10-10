@@ -130,14 +130,6 @@
   }
   function charArtHTML(c) { return c.img ? imgTag(c.img, c.cn) : phArt(c); }
 
-  /* ---------- 导航高亮 ---------- */
-  (function () {
-    var here = location.pathname.split("/").pop() || "index.html";
-    $$(".nav-links a").forEach(function (a) {
-      if (a.getAttribute("href") === here) a.classList.add("on");
-    });
-  })();
-
   /* ================= 首页 ================= */
   function initHome() {
     var box = $("#today");
