@@ -30,13 +30,53 @@ toml_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
 CMD_LINE="command = \"$(toml_escape "$NODE_BIN")\""
 ARG_LINE="args = [\"$(toml_escape "$SERVER")\"]"
+# 本服务就是 stdio 形态，写明传输方式更不容易被误读；部分宿主也会自动补这一行。
+TYPE_LINE='type = "stdio"'
+TABLE_HEADER="[mcp_servers.${NAME}]"
+
+# 带标记的那一份是首选写法；但**不带标记的登记也算本服务的**。
+# 少了这层识别，一段没有标记的登记会被判成「没有本服务」：撤不掉、也
+# 不会提示内容过期。这类登记是早期版本或手工粘贴留下的，实测真实机器上就有。
+has_marker()  { [ -f "$1" ] && grep -qxF "$MARK_OPEN" "$1"; }
+has_table()   { [ -f "$1" ] && grep -qxF "$TABLE_HEADER" "$1"; }
+has_registration() { has_marker "$1" || has_table "$1"; }
+
+# 值也对，才算「内容一致」—— 否则工程换了位置，旧路径会被当成无需改动
+values_current() {
+  [ -f "$1" ] || return 1
+  grep -qF "$CMD_LINE" "$1" && grep -qF "$ARG_LINE" "$1"
+}
 
 block() {
   printf '\n%s\n' "$MARK_OPEN"
-  printf '[mcp_servers.%s]\n' "$NAME"
+  printf '%s\n' "$TABLE_HEADER"
+  printf '%s\n' "$TYPE_LINE"
   printf '%s\n' "$CMD_LINE"
   printf '%s\n' "$ARG_LINE"
   printf '%s\n' "$MARK_CLOSE"
+}
+
+# 摘掉无标记的表段：从表头删到下一个表头之前。TOML 里子表也以 [ 开头，
+# 所以这个边界是安全的；本服务不写子表。
+strip_table() {
+  local cfg="$1" tmp
+  tmp="$(mktemp)"
+  awk -v hdr="$TABLE_HEADER" '
+    $0 == hdr { dropping = 1; pending_blank = 0; next }
+    dropping && /^\[/ { dropping = 0 }
+    dropping { next }
+    /^$/ { if (pending_blank) print ""; pending_blank = 1; next }
+    { if (pending_blank) { print ""; pending_blank = 0 } print }
+    END { if (pending_blank) print "" }
+  ' "$cfg" > "$tmp"
+
+  if [ -n "$(tr -d '[:space:]' < "$tmp")" ]; then
+    cat "$tmp" > "$cfg"
+    rm -f "$tmp"
+  else
+    rm -f "$tmp" "$cfg"
+    printf '  剥离后文件为空，已连同该文件一并删除\n'
+  fi
 }
 
 # 摘掉标记段。只认标记，不认别的。摘完什么都不剩就连文件一并删除
@@ -95,17 +135,34 @@ case "${1:-}" in
 
   installed)
     cfg="${2:?}"
-    [ -f "$cfg" ] || exit 1
-    grep -qF "$MARK_OPEN" "$cfg" || exit 1
-    # 标记在还不够 —— 里面的值也得是当前这一份，否则算「过期待改」
-    grep -qF "$CMD_LINE" "$cfg" || exit 1
-    grep -qF "$ARG_LINE" "$cfg" || exit 1
+    # 带标记的段与无标记的表段都算「已登记」；值也得是当前这一份
+    has_registration "$cfg" || exit 1
+    values_current "$cfg" || exit 1
+    ;;
+
+  status)
+    # 退出码：0=一致，1=有登记但内容过期，3=没有本服务
+    cfg="${2:?}"
+    if ! has_registration "$cfg"; then
+      printf '无登记\t%s\n' "$cfg"
+      exit 3
+    fi
+    if values_current "$cfg"; then
+      if has_marker "$cfg"; then
+        printf '一致\t%s\n' "$cfg"
+      else
+        printf '一致（但这一段没有标记，撤销时按表段整段摘）\t%s\n' "$cfg"
+      fi
+      exit 0
+    fi
+    printf '过期\t%s（登记里的路径与当前不一致）\n' "$cfg"
+    exit 1
     ;;
 
   plan)
     cfg="${2:?}"
-    if [ -f "$cfg" ] && grep -qF "$MARK_OPEN" "$cfg"; then
-      if grep -qF "$CMD_LINE" "$cfg" && grep -qF "$ARG_LINE" "$cfg"; then
+    if has_registration "$cfg"; then
+      if values_current "$cfg"; then
         printf '%s\n' "已登记且内容一致，无需改动。"
         exit 0
       fi
@@ -126,16 +183,20 @@ case "${1:-}" in
     if [ -f "$cfg" ]; then
       backup_if_asked "$cfg"
 
-      if grep -qF "$MARK_OPEN" "$cfg"; then
-        # 已有本服务的段（多半是工程换了位置留下的旧路径）—— 摘掉再写，
-        # 否则会出现两份，而先出现的那份仍然指向旧路径。
+      # 已有本服务的登记（多半是工程换了位置留下的旧路径）—— 摘掉再写，
+      # 否则会出现两份，而先出现的那份仍然指向旧路径。
+      # 无标记的那种按表段摘，摘完补写上带标记的新段。
+      if has_marker "$cfg"; then
         printf '  已有本服务的段，先摘掉旧的重写\n'
         strip_block "$cfg"
-        if [ ! -f "$cfg" ]; then
-          printf '  该文件本来只装着本服务，已重建：%s\n' "$cfg"
-          mkdir -p "$(dirname "$cfg")"
-          : > "$cfg"
-        fi
+      elif has_table "$cfg"; then
+        printf '  已有本服务的表段（没有标记，按表段摘除后重写）\n'
+        strip_table "$cfg"
+      fi
+      if [ ! -f "$cfg" ]; then
+        printf '  该文件本来只装着本服务，已重建：%s\n' "$cfg"
+        mkdir -p "$(dirname "$cfg")"
+        : > "$cfg"
       fi
 
       if [ -s "$cfg" ] && [ "$(tail -c1 "$cfg" | wc -l | tr -d ' ')" = "0" ]; then
@@ -154,14 +215,22 @@ case "${1:-}" in
     cfg="${2:?}"
     [ -f "$cfg" ] || exit 1
     # 没留下过东西就没得撤 —— 用退出码表达，别谎报成功
-    grep -qF "$MARK_OPEN" "$cfg" || exit 1
+    has_registration "$cfg" || exit 1
 
     backup_if_asked "$cfg"
-    strip_block "$cfg"
+    if has_marker "$cfg"; then
+      strip_block "$cfg"
+    else
+      # 无标记的登记：按表段整段摘。这就是「登记还在、只是没标记」那条分支，
+      # 只删 [mcp_servers.<名字>] 这一段，别的表和子表都不碰。
+      printf '  该登记没有标记，按表段摘除\n'
+      strip_table "$cfg"
+    fi
     ;;
 
   *)
-    printf '用法：%s {detect|installed|plan|apply|remove} [配置路径]\n' "$0" >&2
+    printf '用法：%s {detect|status|installed|plan|apply|remove} [配置路径]\n' "$0" >&2
+    printf '  status 的退出码：0=与当前一致，1=已登记但过期，3=没有本服务\n' >&2
     exit 2
     ;;
 

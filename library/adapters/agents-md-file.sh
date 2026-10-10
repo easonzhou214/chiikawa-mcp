@@ -79,12 +79,76 @@ block() {
   printf '%s\n' "$MARK_CLOSE"
 }
 
+# 注入的是「身份」，而目标项目自己的规则里常有一条跟说话方式有关的约定
+# （表情、语气、语言、角色扮演）。两条指令并存时，谁在后面谁更强势，
+# 结果是一个项目里同时存在互斥要求。这里只做「点名」不做判断：
+# 命中不等于冲突，等于「这行该由人看一眼」。
+CONFLICT_RE='(emoji|emote|颜文字|表情|persona|人格|扮演|口癖|语气|说话方式|default language|默认使用中文|默认中文)'
+
+conflict_hits() {
+  [ -f "$AGENTS" ] || return 0
+  awk -v o="$MARK_OPEN" -v c="$MARK_CLOSE" -v oo="$LEGACY_OPEN" -v oc="$LEGACY_CLOSE" '
+    $0 == o || $0 == oo { inside = 1; next }
+    inside { if ($0 == c || $0 == oc) inside = 0; next }
+    { print NR "\t" $0 }
+  ' "$AGENTS" | grep -iE "$CONFLICT_RE" || true
+}
+
+report_conflicts() {
+  local hits
+  hits="$(conflict_hits)"
+  [ -n "$hits" ] || return 0
+  printf '\n    这段人格会追加到文件末尾，而该文件里已有这些规矩可能和它冲突，请自己确认：\n'
+  printf '%s\n' "$hits" | while IFS="$(printf '\t')" read -r n text; do
+    printf '      · 第 %s 行：%s\n' "$n" "$text"
+  done
+  printf '      （人格要求：不出现库外事物、不用 emoji 和颜文字、办事口气照旧。）\n'
+}
+
 case "${1:-}" in
   detect)
     target="${CHIIKAWA_TARGET_PROJECT:-}"
-    [ -n "$target" ] || exit 0
-    [ -d "$target" ] || exit 0
-    ( cd "$target" && pwd )
+    if [ -n "$target" ] && [ -d "$target" ]; then
+      ( cd "$target" && pwd )
+      exit 0
+    fi
+    # 人格锚是项目级的，没有「用户级登记位」这种东西 —— 所以盘点时必须有人
+    # 告诉它去哪儿找。CHIIKAWA_VERIFY_ROOTS 就是这个用途：对每个给定路径，
+    # 报出它自己和它的一级子目录里带本资料库标记的那几个。
+    # 不传就什么都不报（保持「安装时不指定 --into 就不参与」的原语义）。
+    if [ -n "${CHIIKAWA_VERIFY_ROOTS:-}" ]; then
+      old_ifs="$IFS"; IFS=:
+      for root in $CHIIKAWA_VERIFY_ROOTS; do
+        IFS="$old_ifs"
+        [ -d "$root" ] || continue
+        root="$(cd "$root" && pwd)"
+        for proj in "$root" "$root"/*; do
+          [ -d "$proj" ] || continue
+          [ -f "$proj/AGENTS.md" ] || continue
+          grep -qxF -e "$MARK_OPEN" -e "$LEGACY_OPEN" "$proj/AGENTS.md" || continue
+          printf '%s\n' "$proj"
+        done
+      done
+      IFS="$old_ifs"
+    fi
+    ;;
+
+  status)
+    setup_for "${2:?}" || exit 1
+    if [ ! -f "$AGENTS" ]; then
+      printf '缺失\t%s\n' "$AGENTS"
+      exit 3
+    fi
+    if ! grep -qxF -e "$MARK_OPEN" -e "$LEGACY_OPEN" "$AGENTS"; then
+      printf '无标记段\t%s\n' "$AGENTS"
+      exit 3
+    fi
+    if cmp -s <(managed_block) <(block); then
+      printf '一致\t%s\n' "$AGENTS"
+      exit 0
+    fi
+    printf '过期\t%s\n' "$AGENTS"
+    exit 1
     ;;
 
   installed)
@@ -109,6 +173,7 @@ case "${1:-}" in
     if [ -n "$LEGACY_COPY" ] && [ -f "$LEGACY_COPY" ]; then
       printf '    - %s（删除旧副本，并清理变空的目录）\n' "${LEGACY_COPY#$ROOT/}"
     fi
+    report_conflicts
     block
     printf '\n%s\n' '（撤销时摘掉这一整段；若文件因此变空则一并删除。）'
     ;;
@@ -135,7 +200,8 @@ case "${1:-}" in
     ;;
 
   *)
-    printf '用法：%s {detect|installed|plan|apply|remove} [项目根]\n' "$0" >&2
+    printf '用法：%s {detect|status|installed|plan|apply|remove} [项目根]\n' "$0" >&2
+    printf '  status 的退出码：0=与模板一致，1=已注入但过期，3=没有本资料库的段\n' >&2
     exit 2
     ;;
 esac

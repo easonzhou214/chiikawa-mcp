@@ -33,6 +33,8 @@ WITH_SKILL=1
 ONLY_HOST=""
 TARGET_PROJECT=""
 PERSONA_TOUCHED=0
+VERIFY=0
+VERIFY_ROOTS=()
 
 # 人格锚由哪个适配器承担。收尾要据此判断「已注入」这句话能不能说
 # —— 说错了就是假报告，比不打印更糟。
@@ -60,6 +62,13 @@ while [ $# -gt 0 ]; do
     --backup)   BACKUP=1 ;;
     --host)     shift; ONLY_HOST="${1:-}" ;;
     --into)     shift; TARGET_PROJECT="${1:-}" ;;
+    --verify)
+      VERIFY=1
+      # 值是可选的：给了目录就检查它，没给就只标了 VERIFY，到执行处再报清楚
+      if [ $# -gt 1 ] && [ -d "${2:-}" ]; then
+        VERIFY_ROOTS+=("$2"); shift
+      fi
+      ;;
     -h|--help)
       # 适配器名从目录里现取，不写死 —— 加了新适配器忘了改帮助文本是常态。
       ad_list=""
@@ -80,6 +89,7 @@ while [ $# -gt 0 ]; do
   bash install.sh --backup           写入前留一份配置副本（默认不留）
   bash install.sh --host <名字>      只跑指定的适配器，可选：$ad_list
   bash install.sh --into <项目路径>   把人格锚注入到这个项目里（不指定就不注入）
+  bash install.sh --verify <路径>     检查这些位置下已注入的人格是否过期（可重复，只读）
 
 环境变量：
 
@@ -126,6 +136,81 @@ resolve_path() {
 
 printf '\n%s\n' "吉伊卡哇资料库 · 安装"
 printf '%s\n' "──────────────────────────────────────────"
+
+# 适配器靠环境变量拿参数，--verify 那条路径上不经过后面的运行时检测，
+# 所以契约要求的几项要在这里先给全 —— 少一项，相关适配器的 detect 会直接退出，
+# 表现是「盘点里少了这一类登记」，而那看起来和「没装过」一模一样。
+export CHIIKAWA_NAME="$SERVER_NAME"
+export CHIIKAWA_PERSONA="$PERSONA_FILE"
+export CHIIKAWA_TARGET_PROJECT="$TARGET_PROJECT"
+export CHIIKAWA_SERVER="$SERVER"
+export CHIIKAWA_NODE="${CHIIKAWA_NODE:-$(command -v node 2>/dev/null || true)}"
+if [ "$WITH_SKILL" -eq 1 ]; then
+  export CHIIKAWA_SKILL="$SKILL_FILE"
+else
+  export CHIIKAWA_SKILL=""
+fi
+
+# ── --verify：只读盘点，检查已注入项目的人格是否还跟着模板 ──────────────
+# 「人格过期最难发现」是这套设计的固有代价：注入是把正文复制进目标项目，
+# 复制品不会自己跟上模板。这个方法把它变成一条命令，不用记得每个项目在哪。
+# 放在这里是因为它要用上面定义的 step/ok/warn/info/die，且必须在任何写入之前。
+if [ "$VERIFY" -eq 1 ]; then
+  step "已注入内容盘点（只读，不写任何文件）"
+  [ "${#VERIFY_ROOTS[@]}" -gt 0 ] || die "请给出要检查的路径：bash install.sh --verify <路径>（可重复）"
+
+  shopt -s nullglob
+  V_ADAPTERS=("$ADAPTER_DIR"/*.sh)
+  shopt -u nullglob
+  [ "${#V_ADAPTERS[@]}" -gt 0 ] || die "没有可用的适配器"
+
+  # 人格锚是项目级的，适配器没法凭空知道要检查哪些项目 —— 把给定的路径
+  # 传下去，让它自己在那下面找带本资料库标记的项目。
+  V_ROOTS_JOINED=""
+  for vr in "${VERIFY_ROOTS[@]}"; do
+    [ -n "$vr" ] || die "--verify 后面要给一个目录"
+    [ -d "$vr" ] || die "--verify 指的不是一个目录：$vr"
+    V_ROOTS_JOINED="${V_ROOTS_JOINED}${V_ROOTS_JOINED:+:}$(cd "$vr" && pwd)"
+  done
+  export CHIIKAWA_VERIFY_ROOTS="$V_ROOTS_JOINED"
+
+  CHECKED=0; STALE=0; OKN=0; UNSURE=0
+  for vad in "${V_ADAPTERS[@]}"; do
+    vad_name="$(basename "$vad" .sh)"
+    [ -n "$ONLY_HOST" ] && [ "$ONLY_HOST" != "$vad_name" ] && continue
+
+    # 位置由适配器自己报，这里不猜 —— 加一个新宿主只需它有 detect
+    V_CONFIGS="$("$vad" detect 2>/dev/null || true)"
+    [ -n "$V_CONFIGS" ] || continue
+
+    while IFS= read -r vcfg; do
+      [ -n "$vcfg" ] || continue
+      vstatus="$("$vad" status "$vcfg" 2>/dev/null)" && vrc=0 || vrc=$?
+      case "$vrc" in
+        0)  ok    "[$vad_name] 一致：$vcfg"; OKN=$((OKN+1)); CHECKED=$((CHECKED+1)) ;;
+        1)  warn  "[$vad_name] 过期：$vcfg"
+                  STALE=$((STALE+1)); CHECKED=$((CHECKED+1)) ;;
+        3)  : ;;  # 该位置没有本资料库的登记，不算问题，也不刷屏
+        2)  : ;;  # 这个适配器没实现 status，不是错误
+        *)  warn  "[$vad_name] 无法判定（退出码 $vrc）：$vcfg"; UNSURE=$((UNSURE+1)) ;;
+      esac
+    done <<< "$V_CONFIGS"
+  done
+
+  printf '\n'
+  if [ "$CHECKED" -eq 0 ]; then
+    info "没有找到本资料库已登记的位置"
+  elif [ "$STALE" -eq 0 ]; then
+    ok "检查了 $CHECKED 个登记位，全部与当前内容一致"
+  else
+    warn "检查了 $CHECKED 个登记位：$OKN 个一致、$STALE 个已过期"
+    info "过期的那几个不会自己跟上——源文件改了要重跑一次安装"
+    info "更新某一项：bash install.sh --into <项目路径> --yes"
+  fi
+  [ "$UNSURE" -eq 0 ] || info "另有 $UNSURE 个无法判定，看上面的原因"
+  printf '\n'
+  exit 0
+fi
 
 # ── 1. 运行时 ─────────────────────────────────────────────
 step "1. 运行时"
@@ -210,16 +295,32 @@ HS="$(printf '%s\n%s\n' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
   | "$NODE_REAL" "$SERVER" 2>/dev/null || true)"
 
-TOOL_COUNT="$(printf '%s' "$HS" | "$NODE_REAL" -e '
+# 自检的是「契约还在不在」，不是「刚好五个」。
+# 早先写死 = 5：服务端一加工具，全机安装就会失败并报「期望 5 个」——
+# 加能力反而装不上，这是自检在阻止自己该做的事。所以这里只要求
+# 五个契约工具一个不少，多余的算正常演进。
+EXPECTED_TOOLS="list_entries get_entry search_entries get_related describe_schema"
+TOOL_NAMES="$(printf '%s' "$HS" | "$NODE_REAL" -e '
   let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
-    let n=0;
+    let names=[];
     d.trim().split("\n").forEach(l=>{try{const m=JSON.parse(l);
-      if(m.id===2&&m.result&&m.result.tools)n=m.result.tools.length;}catch(e){}});
-    console.log(n);
+      if(m.id===2&&m.result&&m.result.tools)names=m.result.tools.map(t=>t.name);}catch(e){}});
+    console.log(names.join(" "));
   });')"
 
-[ "$TOOL_COUNT" = "5" ] || die "协议自检失败：期望 5 个工具，实际 $TOOL_COUNT 个"
-ok "协议自检通过：initialize 握手 + 5 个工具可枚举"
+MISSING=""
+for want in $EXPECTED_TOOLS; do
+  case " $TOOL_NAMES " in
+    *" $want "*) ;;
+    *) MISSING="${MISSING}${MISSING:+、}$want" ;;
+  esac
+done
+if [ -n "$MISSING" ]; then
+  die "协议自检失败：缺少契约里的工具 $MISSING
+  服务返回的工具是：${TOOL_NAMES:-（一个都没有）}"
+fi
+TOOL_COUNT="$(printf '%s' "$TOOL_NAMES" | wc -w | tr -d ' ')"
+ok "协议自检通过：initialize 握手 + $TOOL_COUNT 个工具可枚举（契约要求的 5 个都在）"
 
 # ── 4. 注册信息 ───────────────────────────────────────────
 if [ "$PRINT_ONLY" -eq 1 ]; then

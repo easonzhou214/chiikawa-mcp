@@ -53,6 +53,20 @@ case "${1:-}" in
     fi
     ;;
 
+  status)
+    # 退出码：0=一致，1=已登记但指向别处或悬空，3=没有本服务
+    if [ ! -L "$DEST" ]; then
+      printf '无登记\t%s\n' "$DEST"
+      exit 3
+    fi
+    if [ "$(readlink "$DEST")" = "$SRC_DIR" ]; then
+      printf '一致\t%s → %s\n' "$DEST" "$SRC_DIR"
+      exit 0
+    fi
+    printf '指向别处\t%s → %s（应为 %s）\n' "$DEST" "$(readlink "$DEST")" "$SRC_DIR"
+    exit 1
+    ;;
+
   installed)
     # 「已登记」= 链接在**且指向当前这一份**。工程换了位置之后旧链接会悬空，
     # 那时这里返回非 0，让 apply 去把它修好，而不是当成「无需改动」放着不管。
