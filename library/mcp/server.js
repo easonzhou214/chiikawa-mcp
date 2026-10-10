@@ -16,7 +16,7 @@ const crypto = require("crypto");
 
 const PROTOCOL_VERSION = "2025-06-18";
 const SERVER_NAME = "chiikawa-archive";
-const SERVER_VERSION = "0.2.0";
+const SERVER_VERSION = "0.3.0";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
@@ -66,6 +66,24 @@ function loadArchive() {
 
 /* ------------------------------------------------------------------ 索引 */
 
+// 说话人字段里会出现合并写法（如「哈奇喵与吉伊」），它指的不是一个实体。
+// 按连接词拆开逐个解析，整串解析不出来时才拆；拆了也不认得的部分算未登记。
+const SPEAKER_SPLIT = /[与和、·]|\s*\/\s*/;
+
+function resolveSpeaker(name, charIdByName) {
+  if (!name) return [];
+  const whole = charIdByName.get(name);
+  if (whole) return [whole];
+  const parts = String(name).split(SPEAKER_SPLIT).map((s) => s.trim()).filter(Boolean);
+  if (parts.length < 2) return [];
+  const ids = [];
+  for (const p of parts) {
+    const id = charIdByName.get(p);
+    if (id) { if (ids.indexOf(id) < 0) ids.push(id); } else { return []; }
+  }
+  return ids;
+}
+
 function buildIndex(a) {
   const byEpisode = new Map();
   const byCharacter = new Map();
@@ -83,18 +101,36 @@ function buildIndex(a) {
 
   const epToChars = new Map();
   const charToEps = new Map();
+  const charToSpokenEps = new Map();
+  const charToActedEps = new Map();
   const unmatched = new Map();
+  const unmatchedEps = new Map();
+
+  const mark = (map, cid, epid) => {
+    if (!map.has(cid)) map.set(cid, new Set());
+    map.get(cid).add(epid);
+  };
+
   for (const e of a.episodes) {
     const set = new Set();
     for (const sh of e.sh || []) {
       for (const l of sh.l || []) {
-        const cid = charIdByName.get(l.w);
-        if (cid) {
+        const ids = resolveSpeaker(l.w, charIdByName);
+        if (!ids.length) {
+          if (l.w) {
+            unmatched.set(l.w, (unmatched.get(l.w) || 0) + 1);
+            if (!unmatchedEps.has(l.w)) unmatchedEps.set(l.w, new Set());
+            unmatchedEps.get(l.w).add(e.id);
+          }
+          continue;
+        }
+        // 动作行（k="a"）与台词行（k="t"）分开记：两者都算「该集有它」，
+        // 但只有台词能证明它当场说过话，倒推的口径必须能拆开看。
+        const byKind = l.k === "a" ? charToActedEps : charToSpokenEps;
+        for (const cid of ids) {
           set.add(cid);
-          if (!charToEps.has(cid)) charToEps.set(cid, new Set());
-          charToEps.get(cid).add(e.id);
-        } else if (l.w) {
-          unmatched.set(l.w, (unmatched.get(l.w) || 0) + 1);
+          mark(charToEps, cid, e.id);
+          mark(byKind, cid, e.id);
         }
       }
     }
@@ -118,10 +154,36 @@ function buildIndex(a) {
     }
   }
 
+  // 预计算「集 → 篇章」，避免每次调用都对全部篇章做一遍区间扫描
+  const epToArcs = new Map();
+  for (const e of a.episodes) epToArcs.set(e.id, new Set(e.a || []));
+  arcRange.forEach((eps, aid) => {
+    eps.forEach((id) => {
+      if (!epToArcs.has(id)) epToArcs.set(id, new Set());
+      epToArcs.get(id).add(aid);
+    });
+  });
+
   const shorts = [];
   const shortByRef = new Map();
   const searchable = [];
   let lineCount = 0;
+
+  // 排序权重：集 > 短篇 > 角色/篇章。同一层级内按集号先后。
+  const ORDER_EPISODE = (id) => id;
+  const ORDER_SHORT = (id, index) => 100000 + id * 100 + index;
+
+  for (const e of a.episodes) {
+    const shText = (e.sh || []).map((sh) => sh.s || "").join(" ");
+    searchable.push({
+      kind: "episode",
+      ref: String(e.id),
+      title: [e.cn || "", e.jp || ""].join(" ").trim(),
+      body: [e.cn || "", e.jp || "", shText].join(" "),
+      lines: [],
+      order: ORDER_EPISODE(e.id),
+    });
+  }
 
   for (const e of a.episodes) {
     (e.sh || []).forEach((sh, i) => {
@@ -145,7 +207,7 @@ function buildIndex(a) {
         title: rec.title,
         body: rec.summary,
         lines: rec.lines,
-        order: e.id * 100 + index,
+        order: ORDER_SHORT(e.id, index),
       });
     });
   }
@@ -174,15 +236,16 @@ function buildIndex(a) {
 
   return {
     byEpisode, byCharacter, byArc, charIdByName, epToChars, charToEps,
-    arcRange, arcLink, shorts, shortByRef, searchable, lineCount, unmatched,
+    charToSpokenEps, charToActedEps, epToArcs,
+    arcRange, arcLink, shorts, shortByRef, searchable, lineCount, unmatched, unmatchedEps,
   };
 }
 
 /* ------------------------------------------------------------------ 检索 */
 
-function runSearch(idx, query, kind, limit) {
+function runSearch(idx, query, kind, offset, limit) {
   const terms = String(query).toLowerCase().split(/\s+/).filter(Boolean);
-  if (!terms.length) return [];
+  if (!terms.length) return { total: 0, offset, returned: 0, has_more: false, hits: [] };
 
   const hits = [];
   for (const rec of idx.searchable) {
@@ -192,39 +255,44 @@ function runSearch(idx, query, kind, limit) {
     const body = String(rec.body).toLowerCase();
     let score = 0;
     let all = true;
+    // 片段只放在本地变量里 —— 早先写在 rec 上再 delete，多个调用方共享同一份记录时会互相串。
+    let snips = [];
 
     for (const t of terms) {
       let hit = 0;
       if (title.indexOf(t) >= 0) hit += 6;
       if (body.indexOf(t) >= 0) hit += 2;
-      const snippets = [];
       for (const l of rec.lines) {
         const text = String(l.text);
         if (text.toLowerCase().indexOf(t) >= 0) {
           hit += 2;
-          if (snippets.length < 3) snippets.push(l.who + "：" + text);
+          if (snips.length < 3) snips.push(l.who + "：" + text);
         }
       }
       if (hit === 0) { all = false; break; }
       score += hit;
-      if (snippets.length) rec._snip = snippets;
     }
     if (!all) continue;
 
-    const snips = (rec._snip || []).slice(0, 3);
-    delete rec._snip;
     hits.push({
       kind: rec.kind,
       ref: rec.ref,
       title: rec.title,
-      snippet: snips.length ? snips : [String(rec.body).slice(0, 80)],
+      snippet: snips.length ? snips.slice(0, 3) : [String(rec.body).slice(0, 80)],
       score,
       order: rec.order,
     });
   }
 
   hits.sort((x, y) => y.score - x.score || x.order - y.order);
-  return hits.slice(0, limit);
+  const page = Number.isFinite(limit) ? hits.slice(offset, offset + limit) : hits.slice(offset);
+  return {
+    total: hits.length,
+    offset,
+    returned: page.length,
+    has_more: offset + page.length < hits.length,
+    hits: page,
+  };
 }
 
 /* ------------------------------------------------------------------ 工具 */
@@ -277,13 +345,14 @@ const TOOLS = [
   {
     name: "search_entries",
     description:
-      "检索短篇、角色与篇章，返回定位及最多 3 条片段，不返全文。",
+      "检索集、短篇、角色与篇章，返回定位及最多 3 条片段，不返全文。按 total / has_more / offset 翻页。",
     inputSchema: {
       type: "object",
       properties: {
         query: { type: "string", description: "检索词，空格分隔表示全部命中" },
         kind: { type: "string", enum: KIND_ENUM, description: "限定类型，省略则全部" },
-        limit: { type: "integer", minimum: 1, maximum: MAX_LIMIT, description: "默认 20" },
+        limit: { type: "integer", minimum: 1, maximum: MAX_LIMIT, description: "本页条数，默认 20" },
+        offset: { type: "integer", minimum: 0, description: "从第几条开始，默认 0" },
       },
       required: ["query"],
     },
@@ -335,22 +404,23 @@ function epBrief(idx, id) {
 }
 
 function arcIdsForEpisode(idx, e) {
-  const set = new Set(e.a || []);
-  idx.arcRange.forEach((eps, aid) => { if (eps.has(e.id)) set.add(aid); });
-  return Array.from(set);
+  // 区间 ∪ 反查，装载时已预计算（见 buildIndex 的 epToArcs）
+  return Array.from(idx.epToArcs.get(e.id) || []);
 }
 
 function tList(idx, kind, filter, offset, limit) {
   const f = filter || {};
   let rows = [];
+  let mapped;
 
   if (kind === "episode") {
-    rows = idx.byEpisode.get(0) ? [] : [];
     rows = Array.from(idx.byEpisode.values());
     if (f.season) rows = rows.filter((e) => seasonOf(e.id) === f.season);
-    if (f.arc_id) rows = rows.filter((e) => (e.a || []).indexOf(f.arc_id) >= 0);
+    // 按篇章过滤一律取「区间 ∪ 反查」，与 get_related / get_entry 同口径。
+    // 早先只看 episodes[].a，会把区间内漏回填的集（如第 214 集）静默漏掉。
+    if (f.arc_id) rows = rows.filter((e) => (idx.epToArcs.get(e.id) || new Set()).has(f.arc_id));
     if (typeof f.has_arc === "boolean") {
-      rows = rows.filter((e) => Boolean((e.a || []).length) === f.has_arc);
+      rows = rows.filter((e) => ((idx.epToArcs.get(e.id) || new Set()).size > 0) === f.has_arc);
     }
     if (f.q) {
       const q = String(f.q).toLowerCase();
@@ -358,7 +428,7 @@ function tList(idx, kind, filter, offset, limit) {
         (e.cn || "").toLowerCase().indexOf(q) >= 0 || (e.jp || "").toLowerCase().indexOf(q) >= 0);
     }
     rows.sort((x, y) => x.id - y.id);
-    var mapped = rows.map((e) => ({
+    mapped = rows.map((e) => ({
       id: e.id, cn: e.cn || "", jp: e.jp || "", date: e.d || "",
       shorts: (e.sh || []).length, arcs: arcIdsForEpisode(idx, e),
     }));
@@ -371,7 +441,7 @@ function tList(idx, kind, filter, offset, limit) {
       rows = rows.filter((s) => s.title.toLowerCase().indexOf(q) >= 0);
     }
     rows.sort((x, y) => x.episode_id - y.episode_id || x.index - y.index);
-    var mapped = rows.map((s) => ({
+    mapped = rows.map((s) => ({
       ref: s.ref, episode_id: s.episode_id, index: s.index,
       title: s.title, confidence: s.confidence,
       summary: s.summary.slice(0, 60),
@@ -385,7 +455,7 @@ function tList(idx, kind, filter, offset, limit) {
         (x.cn || "").toLowerCase().indexOf(q) >= 0 || (x.jp || "").toLowerCase().indexOf(q) >= 0);
     }
     rows.sort((x, y) => (x.start || 0) - (y.start || 0));
-    var mapped = rows.map((x) => ({
+    mapped = rows.map((x) => ({
       id: x.id, cn: x.cn || "", jp: x.jp || "",
       range: [x.start, x.end], tag: x.tag || "", status: x.status || "",
     }));
@@ -398,7 +468,7 @@ function tList(idx, kind, filter, offset, limit) {
         (c.cn || "").toLowerCase().indexOf(q) >= 0 || (c.jp || "").toLowerCase().indexOf(q) >= 0);
     }
     rows.sort((x, y) => String(x.id).localeCompare(String(y.id)));
-    var mapped = rows.map((c) => ({
+    mapped = rows.map((c) => ({
       id: c.id, cn: c.cn || "", jp: c.jp || "", role: c.role || "", tags: c.tags || [],
     }));
   } else {
@@ -417,9 +487,17 @@ function tList(idx, kind, filter, offset, limit) {
 
 function characterEpisodes(idx, c) {
   const declared = (c.eps || []).filter((n) => idx.byEpisode.has(n)).sort((x, y) => x - y);
-  const inferred = Array.from(idx.charToEps.get(c.id) || []).sort((x, y) => x - y);
+  const spoken = Array.from(idx.charToSpokenEps.get(c.id) || []).sort((x, y) => x - y);
+  const acted = Array.from(idx.charToActedEps.get(c.id) || []).sort((x, y) => x - y);
+  const inferred = Array.from(new Set(spoken.concat(acted))).sort((x, y) => x - y);
   const union = Array.from(new Set(declared.concat(inferred))).sort((x, y) => x - y);
-  return { declared, inferred, union };
+  // 互斥拆分：只说没做 / 只做没说 / 又说又做。相加才是 inferred，避免读者把两个数当不相交。
+  const spokenSet = new Set(spoken);
+  const actedSet = new Set(acted);
+  const spokenOnly = spoken.filter((n) => !actedSet.has(n));
+  const actedOnly = acted.filter((n) => !spokenSet.has(n));
+  const both = spoken.filter((n) => actedSet.has(n));
+  return { declared, spoken, acted, spokenOnly, actedOnly, both, inferred, union };
 }
 
 function tGet(idx, archive, kind, id, compact) {
@@ -472,15 +550,27 @@ function tGet(idx, archive, kind, id, compact) {
       episodes: ep.union,
       episode_coverage: {
         declared: ep.declared.length,
-        inferred: ep.inferred.length,
+        from_speaking: ep.spoken.length,
+        from_actions: ep.acted.length,
         union: ep.union.length,
+        breakdown: {
+          declared_only: ep.declared.filter((n) => ep.union.indexOf(n) >= 0 && ep.inferred.indexOf(n) < 0).length,
+          spoken_only: ep.spokenOnly.length,
+          acted_only: ep.actedOnly.length,
+          both: ep.both.length,
+          note: "inferred = spoken_only + acted_only + both；declared 与 inferred 之间可能重叠。",
+        },
         note:
-          "characters[].eps 是代表性出场，不是全集；inferred 由台词/动作倒推，" +
-          "没有台词的出场推不出来，因此是下界。episodes 取两者并集。",
+          "characters[].eps 是代表性出场，不是全集。union = 声明 ∪ 台词可证 ∪ 动作可证。" +
+          "from_speaking 是它确实在这些集里说过话的集数；from_actions 只由动作行（k=\"a\"）推出，" +
+          "证明的是「该集有它」，不等于它开口了——不说话的集也能这样推出来，所以 from_actions 通常远大于 from_speaking。" +
+          "没有台词也没有动作的出场推不出来，union 仍是下界。",
       },
     };
     if (!compact) {
       out.declared_episodes = ep.declared;
+      out.spoken_episodes = ep.spoken;
+      out.action_episodes = ep.acted;
       out.inferred_episodes = ep.inferred;
     }
     return out;
@@ -549,11 +639,21 @@ function tRelated(idx, kind, id, limit) {
     if (!c) return { found: false, error: "没有角色 " + id };
     const ep = characterEpisodes(idx, c);
     const arcs = new Set();
-    for (const n of ep.union) arcIdsForEpisode(idx, idx.byEpisode.get(n)).forEach((aid) => arcs.add(aid));
+    for (const n of ep.union) (idx.epToArcs.get(n) || new Set()).forEach((aid) => arcs.add(aid));
     return Object.assign(
       {
         found: true, kind: "character", id: c.id, cn: c.cn || "", jp: c.jp || "",
-        coverage: { declared: ep.declared.length, inferred: ep.inferred.length, union: ep.union.length },
+        coverage: {
+          declared: ep.declared.length,
+          from_speaking: ep.spoken.length,
+          from_actions: ep.acted.length,
+          union: ep.union.length,
+          breakdown: {
+            spoken_only: ep.spokenOnly.length,
+            acted_only: ep.actedOnly.length,
+            both: ep.both.length,
+          },
+        },
       },
       packEpisodes(ep.union),
       { arcs: packArcs(arcs) }
@@ -617,6 +717,24 @@ function tDescribe(idx, archive) {
   let dupLines = 0;
   seen.forEach((v) => { if (v > 1) dupLines += 1; });
 
+  // 角色出场的两处口径都按真实数据现算，不写死示例数字 —— 写死的说明会随数据漂移。
+  const affected = [];
+  for (const c of archive.characters) {
+    const declared = (c.eps || []).filter((n) => idx.byEpisode.has(n)).length;
+    const union = characterEpisodes(idx, c).union.length;
+    if (union > declared) affected.push({ c, declared, union });
+  }
+  affected.sort((a, b) => (b.union - b.declared) - (a.union - a.declared));
+  const affectedSample = affected.slice(0, 3)
+    .map((x) => x.c.cn + " 声明 " + x.declared + " / 并集 " + x.union)
+    .join("；");
+
+  const spokenName = (n) => (idx.charToSpokenEps.get(n) || new Set()).size;
+  const chiikawaChar = idx.byCharacter.get("chiikawa");
+  const chiikawaSplit = chiikawaChar
+    ? characterEpisodes(idx, chiikawaChar)
+    : { actedOnly: [], inferred: [] };
+
   return {
     server: SERVER_NAME,
     server_version: SERVER_VERSION,
@@ -641,8 +759,8 @@ function tDescribe(idx, archive) {
       "sh[].c": "可信度等级 A/B（A=有资料支撑），不是分类",
       "sh[].s": "短篇概要",
       "sh[].l[]": "台词与动作行",
-      "l[].w": "说话人/动作主体",
-      "l[].k": "a=动作，t=台词",
+      "l[].w": "说话人/动作主体。可能写成合并形式（如「哈奇喵与吉伊」），本服务会拆开解析",
+      "l[].k": "a=动作，t=台词。两者都能证明「该集有它」，只有 t 能证明它说过话",
       "l[].x": "文本",
       "characters[].eps": "代表性出场集号，不是全集（见 known_gaps: character-eps-is-subset）",
       "arcs[].start / .end": "篇章的主体连续区间。与 episodes[].a 语义不同，二者不构成倒排关系，取并集才是完整覆盖",
@@ -673,10 +791,13 @@ function tDescribe(idx, archive) {
       {
         id: "character-eps-is-subset",
         detail:
-          "characters[].eps 是代表性出场，不是全集——30 个角色里 11 个受影响，" +
-          "例如吉伊卡哇声明 9 集、台词可推出 296 集；哈奇喵 7 / 306；乌萨奇 6 / 26。" +
-          "不要拿它回答该角色出现在哪些集。",
-        workaround: "get_related(character) 与 get_entry(character) 返回 episodes 并集，并给出 coverage 拆解声明数与倒推数。",
+          "characters[].eps 是代表性出场，不是全集——" + archive.characters.length + " 个角色里 " +
+          affected.length + " 个的并集大于声明（按差额排前几：" + (affectedSample || "无") + "）。" +
+          "并集由三种证据合成：声明、台词可证、动作可证；其中只有台词能说明它在该集开口了。" +
+          "以吉伊卡哇为例：台词可证 " + spokenName("chiikawa") + " 集，纯动作可证 " +
+          chiikawaSplit.actedOnly.length + " 集，两者相加才等于并集 " + chiikawaSplit.inferred.length + " 集。" +
+          "不要拿声明数回答该角色出现在哪些集。",
+        workaround: "get_related(character) 与 get_entry(character) 返回 episodes 并集，并在 coverage 里拆开 declared / from_speaking / from_actions。",
       },
       {
         id: "duplicate-lines",
@@ -690,12 +811,19 @@ function tDescribe(idx, archive) {
       },
       {
         id: "unmatched-speakers",
-        detail: "有说话人未登记为角色：老师×7、山佬×2、揽客君×1、哈奇喵与吉伊×1、守护君×1。",
-        workaround: "这几处出场推不出角色，关系图有洞；完整清单见本响应的 unmatched_speakers。",
+        detail:
+          "有说话人未登记为角色（共 " + idx.unmatched.size + " 个名字 / " +
+          Array.from(idx.unmatched.values()).reduce((s, n) => s + n, 0) + " 行）：" +
+          (Array.from(idx.unmatched.entries()).map(([n, x]) => n + "×" + x).join("、") || "无") + "。",
+        workaround: "这几处出场推不出角色，关系图有洞；完整清单与各自所在集见本响应的 unmatched_speakers。",
       },
     ],
     unmatched_speakers: Array.from(idx.unmatched.entries())
-      .map(([name, count]) => ({ name, count }))
+      .map(([name, count]) => ({
+        name,
+        count,
+        episode_ids: Array.from(idx.unmatchedEps.get(name) || []).sort((a, b) => a - b),
+      }))
       .sort((x, y) => y.count - x.count),
   };
 }
@@ -704,8 +832,9 @@ function tDescribe(idx, archive) {
 
 function callTool(idx, archive, name, args) {
   const a = args || {};
-  const fallback = name === "search_entries" ? 20 : name === "get_related" ? 60 : DEFAULT_LIMIT;
-  const limit = Math.min(Math.max(1, Number(a.limit) || fallback), MAX_LIMIT);
+  const fallback = name === "get_related" ? 60 : DEFAULT_LIMIT;
+  const rawLimit = Number(a.limit);
+  const limit = Math.min(Math.max(1, rawLimit || fallback), MAX_LIMIT);
   const offset = Math.max(0, Number(a.offset) || 0);
 
   switch (name) {
@@ -713,12 +842,21 @@ function callTool(idx, archive, name, args) {
       return tList(idx, a.kind, a.filter, offset, limit);
     case "get_entry":
       return tGet(idx, archive, a.kind, a.id, Boolean(a.compact));
-    case "search_entries":
+    case "search_entries": {
+      // limit 给了就按它分页；没给就是「拿最相关的一批」，不截到默认 20 之后
+      // 还谎报 has_more=false —— 分页元信息与 list_entries 保持同一套语义。
+      const pageLimit = rawLimit ? limit : Infinity;
+      const out = runSearch(idx, a.query, a.kind, offset, pageLimit);
       return {
         query: a.query,
         kind: a.kind || null,
-        hits: runSearch(idx, a.query, a.kind, limit),
+        total: out.total,
+        offset: out.offset,
+        returned: out.returned,
+        has_more: out.has_more,
+        hits: out.hits,
       };
+    }
     case "get_related":
       return tRelated(idx, a.kind, a.id, limit);
     case "describe_schema":
@@ -773,7 +911,10 @@ function handle(line) {
           serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
           instructions:
             "《吉伊卡哇》只读资料库，仅用于作品内容查询。普通闲聊和技术任务不调用；" +
-            "本会话首次使用先查 describe_schema，已核实信息可复用。",
+            "本会话首次使用先调 describe_schema（工具，不是方法），已核实信息可复用。" +
+            "自述类问题（问某角色自己的经历、日常、喜好、心情、打算）先查库再开口：" +
+            "库里有就顺着讲，没有可按库中已有的世界常识即兴补一段，但不与库中设定冲突、" +
+            "不引入库外事物、不给即兴内容安集号；查库过程不必播报。",
         });
         return;
       case "ping":
