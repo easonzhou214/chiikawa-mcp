@@ -144,7 +144,7 @@ export CHIIKAWA_NAME="$SERVER_NAME"
 export CHIIKAWA_PERSONA="$PERSONA_FILE"
 export CHIIKAWA_TARGET_PROJECT="$TARGET_PROJECT"
 export CHIIKAWA_SERVER="$SERVER"
-export CHIIKAWA_NODE="${CHIIKAWA_NODE:-$(command -v node 2>/dev/null || true)}"
+export CHIIKAWA_NODE="$(resolve_path "${CHIIKAWA_NODE:-$(command -v node 2>/dev/null || true)}")"
 if [ "$WITH_SKILL" -eq 1 ]; then
   export CHIIKAWA_SKILL="$SKILL_FILE"
 else
@@ -414,6 +414,8 @@ fi
 
 ACTION="写入"; [ "$UNINSTALL" -eq 1 ] && ACTION="撤销"
 TOUCHED=0
+# 撤销时记下人格锚撤过的那一项，见收尾的提醒
+PERSONA_REMOVED=""
 
 for ad in "${ADAPTERS[@]}"; do
   ad_name="$(basename "$ad" .sh)"
@@ -437,6 +439,7 @@ for ad in "${ADAPTERS[@]}"; do
         if "$ad" remove "$cfg" >/dev/null 2>&1; then
           ok "已撤销：$cfg"
           TOUCHED=1
+          [ "$ad_name" = "$PERSONA_ADAPTER" ] && PERSONA_REMOVED="$cfg"
         else
           info "$cfg 里没有本服务，跳过"
         fi
@@ -483,6 +486,28 @@ fi
 
 if [ "$APPLY" -eq 0 ] && [ "$TOUCHED" -eq 1 ]; then
   printf '  加 %s--yes%s 才会真的%s。\n' "$C_OK" "$C_RST" "$ACTION"
+fi
+
+# 撤销完要说清「还有什么没撤」。人格锚是项目级的，不带 --into 就找不到任何目标，
+# 于是它静默留着 —— 用户会以为撤干净了。实测踩过：用户级两处都撤了，
+# 两个项目里的人格原样还在，而输出里一个字都没提。
+if [ "$APPLY" -eq 1 ] && [ "$UNINSTALL" -eq 1 ]; then
+  if [ -n "$PERSONA_REMOVED" ]; then
+    printf '\n  人格锚是从项目里摘掉的，撤销时记得对每个注入过的项目各跑一次：\n'
+    printf '      bash install.sh --into <项目路径> --uninstall --yes\n'
+  else
+    cat <<'EOS'
+
+  注意：**项目里的 agent 不在这次撤销范围内**。人格锚是项目级的，
+  不带 --into 就找不到目标，所以它仍然留在那些项目的说明文件里。
+  要摘掉某个项目的：
+
+      bash install.sh --into <项目路径> --uninstall --yes
+
+  想先看看哪些项目还留着：bash install.sh --verify <项目所在目录>
+
+EOS
+  fi
 fi
 
 if [ "$APPLY" -eq 1 ] && [ "$UNINSTALL" -eq 0 ]; then
