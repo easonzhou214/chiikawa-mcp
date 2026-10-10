@@ -30,8 +30,11 @@ toml_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
 CMD_LINE="command = \"$(toml_escape "$NODE_BIN")\""
 ARG_LINE="args = [\"$(toml_escape "$SERVER")\"]"
-# 本服务就是 stdio 形态，写明传输方式更不容易被误读；部分宿主也会自动补这一行。
-TYPE_LINE='type = "stdio"'
+# 以前这里会写一行 type = "stdio"。实测宿主（codex 0.159）把它当成无法识别的
+# 配置项并每次启动都告警：`mcp_servers.chiikawa.type` is ignored —— 收益是零、
+# 噪音 +1，所以不再写。stdio 是这类登记的唯一形态，不写也不会被误读。
+# 注意：老的登记里可能还留着这一行，installed/status 不检查它，重跑一次安装
+# 就会整段重写成不带它的形式。
 TABLE_HEADER="[mcp_servers.${NAME}]"
 
 # 带标记的那一份是首选写法；但**不带标记的登记也算本服务的**。
@@ -50,7 +53,6 @@ values_current() {
 block() {
   printf '\n%s\n' "$MARK_OPEN"
   printf '%s\n' "$TABLE_HEADER"
-  printf '%s\n' "$TYPE_LINE"
   printf '%s\n' "$CMD_LINE"
   printf '%s\n' "$ARG_LINE"
   printf '%s\n' "$MARK_CLOSE"
