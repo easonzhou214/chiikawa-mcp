@@ -1,0 +1,26 @@
+# 发布站点时不要把 library/ 带出去。
+#
+# 本站是纯静态站：真正要发布的只有 6 个 html + css/ + js/ + assets/。
+# library/ 是给 agent 用的资料库与安装工具（服务端、适配器、人格模板、
+# 方法说明），跟站点展示无关，公开出去只是白送内部实现。
+#
+# 为什么用 .gitattributes 而不是 .gitignore：
+#   library/ **属于仓库** —— 别人 git pull 就是为了拿到 server.js 和这些脚本。
+#   用 .gitignore 会拦住新文件的跟踪：git 不再深入这个目录，
+#   连往 library/mcp/ 里加一个新文件都会加不进去（实测踩过）。
+#   .gitattributes 的 export-ignore 只作用于归档导出，
+#   不影响 git status、不影响跟踪、不影响 pull。
+#
+# 生效范围（说清楚，别当成万能）：
+#   ✔ git archive / 基于它的发布流程（GitHub 源码包下载、部分 CI 打包）
+#   ✘ rsync、拖拽上传：它们不读 .gitattributes
+#
+# 用 rsync 或拖拽部署时自己排除，或只挑要发布的目录：
+#
+#   rsync -av --exclude=library --exclude=.workbuddy --exclude=.git ./ user@host:/站点目录/
+
+library export-ignore
+library/** export-ignore
+.workbuddy export-ignore
+.workbuddy/** export-ignore
+.DS_Store export-ignore
