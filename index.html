@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>吉伊卡哇 剧情资料站 · ちいかわ</title>
 <meta name="description" content="《吉伊卡哇》（ちいかわ）动画第 1–345 话逐集剧情汇总与台词记录，全部中文，含篇章地图、角色图鉴与台词搜索。">
+<meta name="theme-color" content="#FFF9F3">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="吉伊卡哇 剧情资料站">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:title" content="吉伊卡哇 剧情资料站 · 第 1–345 话逐话剧情">
+<meta property="og:description" content="把每一话讲了什么、谁说了什么整理成中文资料：480 个短篇剧情、990 条台词，按篇章与季度归档。">
 <link rel="icon" href="assets/images/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/images/logo-chiikawa.png">
 <link rel="stylesheet" href="css/style.css">
@@ -13,7 +19,7 @@
 
 <nav class="nav"><div class="nav-in">
   <a class="nav-logo" href="index.html">
-    <img src="assets/images/logo-chiikawa.png" alt="ちいかわ">
+    <img src="assets/images/logo-chiikawa.png" alt="ちいかわ" width="360" height="111">
     <span class="lp">剧情资料站</span>
   </a>
   <div class="nav-links">
@@ -31,20 +37,28 @@
 
   <section class="hero">
     <div class="hero-txt">
-      <img class="hero-logo" src="assets/images/logo-chiikawa.png" alt="ちいかわ">
+      <img class="hero-logo" src="assets/images/logo-chiikawa.png" alt="ちいかわ" width="360" height="111">
       <h1>把吉伊卡哇的每一话，<br><em>一话一话</em>读给你听</h1>
       <p>从第一话趴在布丁上的那只兔子，到第 345 话吉伊在梦里翻开卷子——
         这里收着 <b>第 1–345 话</b>的完整中文剧情汇总，每一条台词与行为都标好了是谁做的。</p>
       <a class="btn" href="episodes.html">开始翻剧情 →</a>
-      <a class="btn ghost" href="arcs.html" style="margin-left:8px">先看长篇脉络</a>
+      <a class="btn ghost ml" href="arcs.html">先看长篇脉络</a>
     </div>
     <div class="hero-art">
       <span class="spark s1"></span><span class="spark s2"></span><span class="spark s3"></span>
-      <img class="kv" src="assets/images/hero-kv.jpg" alt="吉伊卡哇 主视觉">
+      <img class="kv" src="assets/images/hero-kv.jpg" alt="吉伊卡哇 主视觉" width="778" height="1100">
     </div>
   </section>
 
-  <section class="sec" style="margin-top:34px">
+  <noscript>
+    <div class="card noscript-note">
+      <b>需要开启 JavaScript。</b>首页的统计、今日一话，以及剧集、篇章、角色、搜索四个页面
+      都是按数据即时渲染的 —— 关掉脚本只会看到空壳。剧情数据本身在
+      <code>js/episodes-*.js</code> 里，是纯文本。
+    </div>
+  </noscript>
+
+  <section class="sec first">
     <div class="stats" id="stats"></div>
   </section>
 
@@ -59,26 +73,26 @@
     </div>
     <div class="entries">
       <a class="entry" href="episodes.html">
-        <div class="ic" style="background:#FFE4EC">📖</div>
+        <div class="ic ic-pk">📖</div>
         <h3>剧集总览</h3>
         <p>第 1–345 话全在这里。每一话都能展开，看到每个短篇的剧情概要，以及「角色名：内容」格式的台词与行为清单；可按季度、篇章、可信度筛选。</p>
       </a>
       <a class="entry" href="arcs.html">
-        <div class="ic" style="background:#E4F5EC">🧭</div>
+        <div class="ic ic-mt">🧭</div>
         <h3>篇章地图</h3>
         <p>除草检定、三星餐厅、开关与新朋友、真实恐怖故事……把散落的单话串成一条条能读的长线。</p>
       </a>
       <a class="entry" href="characters.html">
-        <div class="ic" style="background:#F0E9FB">🐰</div>
+        <div class="ic ic-pu">🐰</div>
         <h3>角色图鉴</h3>
         <p>30 位角色的档案：中日名、日配与中配声优、性格、代表话数，还有它最像自己的一句话。</p>
       </a>
     </div>
-    <a class="entry" href="search.html" style="margin-top:18px;display:flex;align-items:center;gap:18px">
-      <div class="ic" style="background:#FFF2CC;margin:0">🔍</div>
+    <a class="entry entry-wide" href="search.html">
+      <div class="ic ic-yl">🔍</div>
       <div>
-        <h3 style="margin-bottom:4px">台词搜索</h3>
-        <p style="margin:0">输入「缎带」「除草检定」或者任意角色的名字，跨全部 345 话的剧情与台词一次翻出来。</p>
+        <h3 class="tight">台词搜索</h3>
+        <p class="tight">输入「缎带」「除草检定」或者任意角色的名字，跨全部 345 话的剧情与台词一次翻出来。</p>
       </div>
     </a>
   </section>
@@ -89,31 +103,32 @@
       <span class="sub">一分钟一话，播了四年多</span>
     </div>
     <div class="card about-card">
-      <img src="assets/images/anime-announce.jpg" alt="动画化决定 贺图" style="border-radius:18px">
+      <img class="about-img" src="assets/images/anime-announce.jpg" alt="动画化决定 贺图"
+           width="1500" height="1064" loading="lazy">
       <div>
-        <p style="margin:0 0 12px">《吉伊卡哇》（ちいかわ）改编自 nagano 在社交网络上连载的漫画，2022 年 4 月 4 日起在日本富士电视台晨间节目《闹钟电视》内播出。
+        <p>《吉伊卡哇》（ちいかわ）改编自 nagano 在社交网络上连载的漫画，2022 年 4 月 4 日起在日本富士电视台晨间节目《闹钟电视》内播出。
           <b>每集只有一分钟左右</b>，通常由一到两个独立短篇组成——这也是它既好入口、又能在短短一分钟里把情绪推到顶的原因。</p>
-        <p style="margin:0 0 12px">画风很软，世界观却一点都不软：这里有资格证考试、有讨伐任务和排行榜、有打工与报酬，也有会在夜深时冒出来的、说不清是什么的东西。
+        <p>画风很软，世界观却一点都不软：这里有资格证考试、有讨伐任务和排行榜、有打工与报酬，也有会在夜深时冒出来的、说不清是什么的东西。
           主角们靠除草和接活赚钱，买东西要攒很久——正因如此，每一个「终于买到了」才那么有分量。</p>
-        <p style="margin:0" class="muted">本站在做的是<b>中文</b>的剧情汇总：<b>日方放送回第 1–345 话已全部收录</b>，中文引进版（B 站／优酷／芒果 TV）目前覆盖到第 240 话，站内按季标注了对应范围。</p>
+        <p class="muted">本站在做的是<b>中文</b>的剧情汇总：<b>日方放送回第 1–345 话已全部收录</b>，中文引进版（B 站／优酷／芒果 TV）目前覆盖到第 240 话，站内按季标注了对应范围。</p>
       </div>
     </div>
   </section>
 
   <section class="sec">
-    <img src="assets/images/banner-cheers.jpg" alt="干杯" style="width:100%;border-radius:26px;box-shadow:var(--shadow)">
+    <img class="banner" src="assets/images/banner-cheers.jpg" alt="干杯" width="1400" height="787" loading="lazy">
   </section>
 
   <section class="sec">
-    <div class="card" style="background:linear-gradient(135deg,#FFF7EC,#FDEFF5)">
-      <h2 style="margin:0 0 10px;font-size:19px">关于这些剧情的可信度</h2>
-      <p style="margin:0 0 12px;color:var(--ink-2);font-size:14.5px">
+    <div class="card soft">
+      <h2 class="sm">关于这些剧情的可信度</h2>
+      <p class="lead">
         本站的<b>分集标题、播出日期、篇章归属</b>来自可核实的公开资料（日文维基、百度百科、萌娘百科等），这部分是准确的。
         但<b>逐集的详细剧情与台词，网上并没有现成的中文数据库</b>——B 站与优酷只有整部简介，没有分集剧情文本。所以这部分由本站撰写整理，
         并且每一条短篇都标了来源等级：</p>
-      <p style="margin:0 0 6px"><span class="badge-lv a">可信度 A</span> 有公开报道或官方简介支撑、且被广泛引用的剧情</p>
-      <p style="margin:0 0 14px"><span class="badge-lv">可信度 B</span> 依据该话标题与作品设定整理出的剧情框架，细节可能与本篇有出入</p>
-      <p style="margin:0" class="muted">看到 B 级的段落时，可以把它当成一份带你找到重点的导读。要是你发现某一话写错了，告诉乌，改一行数据就能修好。</p>
+      <p class="credit"><span class="badge-lv a">可信度 A</span> 有公开报道或官方简介支撑、且被广泛引用的剧情</p>
+      <p class="credit"><span class="badge-lv">可信度 B</span> 依据该话标题与作品设定整理出的剧情框架，细节可能与本篇有出入</p>
+      <p class="muted">看到 B 级的段落时，可以把它当成一份带你找到重点的导读。要是你发现某一话写错了，告诉乌，改一行数据就能修好。</p>
     </div>
   </section>
 

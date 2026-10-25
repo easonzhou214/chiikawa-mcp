@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>角色图鉴 · 吉伊卡哇 剧情资料站</title>
 <meta name="description" content="《吉伊卡哇》30 位角色的档案：中日名、声优、性格、代表话数，以及每个角色最像自己的一句话。">
+<meta name="theme-color" content="#FFF9F3">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="吉伊卡哇 剧情资料站">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:title" content="角色图鉴 · 吉伊卡哇 剧情资料站">
+<meta property="og:description" content="30 位角色的中日名、声优、别名、代表话数与最像自己的一句话。">
 <link rel="icon" href="assets/images/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/images/logo-chiikawa.png">
 <link rel="stylesheet" href="css/style.css">
@@ -13,7 +19,7 @@
 
 <nav class="nav"><div class="nav-in">
   <a class="nav-logo" href="index.html">
-    <img src="assets/images/logo-chiikawa.png" alt="ちいかわ">
+    <img src="assets/images/logo-chiikawa.png" alt="ちいかわ" width="360" height="111">
     <span class="lp">剧情资料站</span>
   </a>
   <div class="nav-links">
@@ -29,12 +35,17 @@
 
 <main class="wrap">
 
-  <section class="sec" style="margin-top:30px">
+  <section class="sec first">
     <div class="sec-head">
-      <h2>角色图鉴</h2>
+      <h1>角色图鉴</h1>
       <span class="sub">点开卡片看完整档案</span>
     </div>
-    <p style="margin:0 0 22px;color:var(--ink-2);font-size:14.5px;max-width:760px">
+    <noscript>
+      <div class="card noscript-note">
+        <b>需要开启 JavaScript。</b>30 张角色卡由 <code>js/data-characters.js</code> 生成，关掉脚本就看不到档案。
+      </div>
+    </noscript>
+    <p class="page-intro">
       这部作品里没有一个角色是靠「设定集」立起来的——它们全靠一分钟一分钟地做事被记住。
       下面是 30 位角色，各自的立场、声优、代表话数，以及一句最像它自己的话。
       有官方立绘的用官方图，其余统一使用占位符——本站不为角色代画形象。
@@ -45,7 +56,7 @@
 </main>
 
 <div class="char-detail" id="char-detail" role="dialog" aria-modal="true" aria-label="角色详情">
-  <div class="box" style="position:relative">
+  <div class="box">
     <button class="close" data-close aria-label="关闭">×</button>
     <div id="cd-body"></div>
   </div>
@@ -65,16 +76,6 @@
 </footer>
 
 <script src="js/data-characters.js"></script>
-<script src="js/data-arcs.js"></script>
-<script src="js/episodes-01-40.js"></script>
-<script src="js/episodes-41-80.js"></script>
-<script src="js/episodes-81-120.js"></script>
-<script src="js/episodes-121-160.js"></script>
-<script src="js/episodes-161-200.js"></script>
-<script src="js/episodes-201-240.js"></script>
-<script src="js/episodes-241-280.js"></script>
-<script src="js/episodes-281-320.js"></script>
-<script src="js/episodes-321-345.js"></script>
 <script src="js/nav.js"></script>
 <script src="js/app.js"></script>
 </body>

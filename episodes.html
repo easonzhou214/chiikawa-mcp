@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>剧集总览 · 吉伊卡哇 剧情资料站</title>
 <meta name="description" content="《吉伊卡哇》第 1–345 话逐话剧情与台词记录，可按季度、篇章、可信度筛选，每话展开看短篇概要与角色台词。">
+<meta name="theme-color" content="#FFF9F3">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="吉伊卡哇 剧情资料站">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:title" content="剧集总览 · 第 1–345 话 · 吉伊卡哇 剧情资料站">
+<meta property="og:description" content="逐话剧情与「角色名：内容」格式的台词记录，可按季度、篇章、可信度筛选。">
 <link rel="icon" href="assets/images/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/images/logo-chiikawa.png">
 <link rel="stylesheet" href="css/style.css">
@@ -13,7 +19,7 @@
 
 <nav class="nav"><div class="nav-in">
   <a class="nav-logo" href="index.html">
-    <img src="assets/images/logo-chiikawa.png" alt="ちいかわ">
+    <img src="assets/images/logo-chiikawa.png" alt="ちいかわ" width="360" height="111">
     <span class="lp">剧情资料站</span>
   </a>
   <div class="nav-links">
@@ -29,12 +35,18 @@
 
 <main class="wrap">
 
-  <section class="sec" style="margin-top:30px">
+  <section class="sec first">
     <div class="sec-head">
-      <h2>剧集总览 · 第 1–345 话</h2>
+      <h1>剧集总览 · 第 1–345 话</h1>
       <span class="sub">点任意一话展开剧情与台词</span>
     </div>
-    <p style="margin:0 0 20px;color:var(--ink-2);font-size:14.5px;max-width:780px">
+    <noscript>
+      <div class="card noscript-note">
+        <b>需要开启 JavaScript。</b>这一页的 345 话列表是由 <code>js/episodes-*.js</code>
+        里的数据即时渲染的，关掉脚本就只剩筛选框。数据本身是纯文本，可以直接打开那些文件读。
+      </div>
+    </noscript>
+    <p class="page-intro">
       全部按日方放送回编号排列。<b>中文引进版（B 站／优酷／芒果 TV）目前覆盖到第 240 话</b>——第一季 1–120、第二季 121–240；
       第 241–345 话尚未引进，站内已按日方进度补齐，并标注了对应季数。
     </p>
@@ -45,9 +57,6 @@
       <label class="vh" for="f-season">季度</label>
       <select id="f-season">
         <option value="all">全部季度</option>
-        <option value="1">中文版第一季（1–120）</option>
-        <option value="2">中文版第二季（121–240）</option>
-        <option value="3">中文版未覆盖（241 以后）</option>
       </select>
       <label class="vh" for="f-arc">篇章</label>
       <select id="f-arc"><option value="all">全部篇章</option></select>

@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>篇章地图 · 吉伊卡哇 剧情资料站</title>
 <meta name="description" content="《吉伊卡哇》的 40 个长篇脉络：除草检定、三星餐厅、黑色流星、山佬、下克上等篇章的起止话数与概述。">
+<meta name="theme-color" content="#FFF9F3">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="吉伊卡哇 剧情资料站">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:title" content="篇章地图 · 吉伊卡哇 剧情资料站">
+<meta property="og:description" content="把散落的单话串成能读的长线：40 个长篇的起止话数与概述。">
 <link rel="icon" href="assets/images/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/images/logo-chiikawa.png">
 <link rel="stylesheet" href="css/style.css">
@@ -13,7 +19,7 @@
 
 <nav class="nav"><div class="nav-in">
   <a class="nav-logo" href="index.html">
-    <img src="assets/images/logo-chiikawa.png" alt="ちいかわ">
+    <img src="assets/images/logo-chiikawa.png" alt="ちいかわ" width="360" height="111">
     <span class="lp">剧情资料站</span>
   </a>
   <div class="nav-links">
@@ -29,18 +35,23 @@
 
 <main class="wrap">
 
-  <section class="sec" style="margin-top:30px">
+  <section class="sec first">
     <div class="sec-head">
-      <h2>篇章地图</h2>
+      <h1>篇章地图</h1>
       <span class="sub">把散落的单话，串成能读的长线</span>
     </div>
-    <p style="margin:0 0 22px;color:var(--ink-2);font-size:14.5px;max-width:760px">
+    <noscript>
+      <div class="card noscript-note">
+        <b>需要开启 JavaScript。</b>篇章列表由 <code>js/data-arcs.js</code> 与剧集数据即时生成，关掉脚本就只剩这段说明。
+      </div>
+    </noscript>
+    <p class="page-intro">
       《吉伊卡哇》看起来是每话一分钟的单元剧，但它其实有一条条连续几话、甚至二十几话的长篇。
       这些长篇才是这部作品真正在做的事：<b>除草检定篇</b>写一场考试如何改变两个人的位置；
       <b>被表扬的丝带篇</b>写两个人各自体贴、于是双双错过；<b>睡衣派对篇</b>写一群没有脸的人如何短暂地被看见。
       下面是按起止话数排好的全部长篇，已经精写过的可以直接点进去看话数。
     </p>
-    <p class="muted" id="arc-note" style="margin:0 0 22px"></p>
+    <p class="muted arc-note" id="arc-note"></p>
     <div class="arc-list" id="arc-list"></div>
   </section>
 

@@ -33,11 +33,14 @@
     if (!a || typeof a !== "object") return null;
     a.cn = a.cn || a.id || ""; a.jp = a.jp || ""; a.tag = a.tag || "";
     a.summary = a.summary || ""; a.status = a.status || "";
+    // 起止话数漏了会渲染成「第 undefined–undefined 话」，这里一并兜住
+    a.start = Number(a.start) || 0; a.end = Number(a.end) || 0;
     return a;
   }
 
+  // map 已经返回新数组，不必再 slice 一次
   var EPS = (CK.episodes || []).map(normEp).filter(Boolean)
-    .slice().sort(function (a, b) { return a.id - b.id; });
+    .sort(function (a, b) { return a.id - b.id; });
   var ARCS = (CK.arcs || []).map(normArc).filter(Boolean);
   var CHARS = (CK.characters || []).map(normChar).filter(Boolean);
   var ARC_MAP = {};
@@ -60,7 +63,9 @@
   var HL_CACHE = {};
   var HL_CACHE_KEYS = [];
   function hlRe(kw) {
-    if (HL_CACHE[kw]) return HL_CACHE[kw];
+    // 用 hasOwnProperty 而不是直接取值：缓存里可能是 null（非法正则），
+    // 而 null 是 falsy，直接判断会让它每次都重建；顺带挡住 constructor 这类原型键。
+    if (Object.prototype.hasOwnProperty.call(HL_CACHE, kw)) return HL_CACHE[kw];
     var re;
     try {
       re = new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
@@ -72,23 +77,35 @@
     if (HL_CACHE_KEYS.length > 8) delete HL_CACHE[HL_CACHE_KEYS.shift()];
     return re;
   }
+  /* 高亮。顺序是「先在原文上匹配，再逐段转义」，不能反过来。
+     反过来（先 esc 再匹配）有两个坑，都会真的出现在页面上：
+       · 搜「&」「<」匹配不到 —— 原文里那个字符已经变成 &amp; 了；
+       · 搜到实体名（amp / lt / quot）会把 &amp; 从中间切开，
+         浏览器把剩下的半截当普通文本，页面显示成 A&;B。 */
   function hl(text, kw) {
-    var t = esc(text);
-    if (!kw) return t;
+    var s = text == null ? "" : String(text);
+    if (!kw) return esc(s);
     var re = hlRe(kw);
-    if (!re) return t;
+    if (!re) return esc(s);
     re.lastIndex = 0;   // 带 g 的正则是有状态的，复用前必须复位
-    return t.replace(re, function (m) { return "<mark>" + m + "</mark>"; });
+    var out = "", last = 0, m;
+    while ((m = re.exec(s)) !== null) {
+      if (!m[0]) { re.lastIndex++; continue; }   // 空匹配会让循环原地打转
+      out += esc(s.slice(last, m.index)) + "<mark>" + esc(m[0]) + "</mark>";
+      last = m.index + m[0].length;
+    }
+    return out + esc(s.slice(last));
   }
+  /* 中文引进版的分季边界是外部事实（B 站／优酷／芒果 TV 的引进范围）。
+     标签、下拉选项、tooltip 全从这一份出来 —— 原来 episodes.html 里另抄了一份，
+     两处措辞已经不一致了（「中文版第一季」vs「中文引进版 第一季」）。 */
+  var SEASONS = [
+    { id: 1, label: "中文引进版 第一季（第 1–120 话）", option: "中文版第一季（1–120）", tag: "中文版第 1 季" },
+    { id: 2, label: "中文引进版 第二季（第 121–240 话）", option: "中文版第二季（121–240）", tag: "中文版第 2 季" },
+    { id: 3, label: "中文引进版尚未覆盖（第 241 话以后）", option: "中文版未覆盖（241 以后）", tag: "中文版未引进" }
+  ];
   function seasonOf(id) { return id <= 120 ? 1 : (id <= 240 ? 2 : 3); }
-  /* 中文引进版的分季边界是外部事实（B 站／优酷／芒果 TV 的引进范围），
-     这里集中成一份，改一处即可；站内多年以后扩了季，只动这两行。 */
-  var SEASON_RANGE = "1–120 / 121–240 / 241 以后";
-  var SEASON_LABEL = {
-    1: "中文引进版 第一季（第 1–120 话）",
-    2: "中文引进版 第二季（第 121–240 话）",
-    3: "中文引进版尚未覆盖（第 241 话以后）"
-  };
+  function seasonById(id) { return SEASONS[id - 1] || SEASONS[SEASONS.length - 1]; }
   function confBadge(c) {
     return c === "A"
       ? '<span class="badge-lv a">可信度 A · 有资料支撑</span>'
@@ -146,7 +163,7 @@
           '<div class="lab">今日随机一话</div>' +
           '<h2>第 ' + ep.id + ' 话 · ' + esc(ep.cn) + "</h2>" +
           "<p>" + esc(s.s.length > 130 ? s.s.slice(0, 130) + "……" : s.s) + "</p>" +
-          (l ? '<p style="margin-top:10px"><b style="color:var(--pink-dark)">' + esc(l.w) + "：</b>" + esc(l.x) + "</p>" : "") +
+          (l ? '<p class="ln"><b>' + esc(l.w) + "：</b>" + esc(l.x) + "</p>" : "") +
           '<div class="acts"><a class="btn" href="episodes.html#' + ep.id + '">看这一话的完整剧情</a>' +
           '<a class="btn ghost" href="search.html">搜台词</a></div>';
       }
@@ -183,6 +200,14 @@
         selArc.appendChild(o);
       });
     }
+    // 季度选项也从 SEASONS 生成，不再在 HTML 里抄第二份
+    if (selSeason) {
+      SEASONS.forEach(function (s) {
+        var o = document.createElement("option");
+        o.value = String(s.id); o.textContent = s.option;
+        selSeason.appendChild(o);
+      });
+    }
 
     function matches(e) {
       if (state.season !== "all" && seasonOf(e.id) !== Number(state.season)) return false;
@@ -213,20 +238,21 @@
           '<div class="lines"><div class="lt">台词与行为记录（角色名：内容）</div>' + lines + "</div>" +
           "</div>";
       }).join("");
+      var season = seasonById(seasonOf(e.id));
       return '<article class="ep" id="ep-' + e.id + '">' +
-        '<div class="ep-head" role="button" tabindex="0" aria-expanded="false">' +
+        '<div class="ep-head" role="button" tabindex="0" aria-expanded="false" aria-controls="epb-' + e.id + '">' +
         '<div class="ep-no"><small>第</small><b>' + e.id + "</b></div>" +
         '<div class="ep-main">' +
         '<div class="cn">' + hl(e.cn, kw) + "</div>" +
         '<div class="jp">' + esc(e.jp) + "</div>" +
         '<div class="ep-meta"><span class="tag bl">' + esc(e.d) + "</span>" +
-        '<span class="tag pu" title="' + esc(SEASON_LABEL[seasonOf(e.id)]) + '">中文版第 ' + seasonOf(e.id) + " 季</span>" +
+        '<span class="tag pu" title="' + esc(season.label) + '">' + esc(season.tag) + "</span>" +
         (e.a.length ? arcTags(e.a) : '<span class="tag gy">单话</span>') +
         "<span class=\"tag gy\">" + e.sh.length + " 个短篇</span></div>" +
         "</div>" +
         '<div class="ep-arrow">▾</div>' +
         "</div>" +
-        '<div class="ep-body">' + body + "</div>" +
+        '<div class="ep-body" id="epb-' + e.id + '">' + body + "</div>" +
         "</article>";
     }
 
@@ -239,7 +265,8 @@
     function render() {
       var keep = openIds();
       var hits = EPS.filter(matches);
-      $("#res-count").textContent = "共 " + hits.length + " 话";
+      var count = $("#res-count");
+      if (count) count.textContent = "共 " + hits.length + " 话";
       list.innerHTML = hits.length
         ? hits.map(function (e) { return epHTML(e, state.kw); }).join("")
         : '<div class="empty-state"><div class="big">🐰</div><p>没有找到符合条件的话数，换个关键词试试。</p></div>';
@@ -256,13 +283,16 @@
       if (head) head.setAttribute("aria-expanded", on ? "true" : "false");
     }
 
+    function toggle(article) {
+      setOpen(article, !article.classList.contains("open"));
+    }
+
     function toggleFrom(ev) {
       var head = ev.target.closest(".ep-head");
       if (!head) return;
       // 点标题里的篇章标签是去跳转的，别顺手把这一话展开
       if (ev.target.closest("a")) return;
-      var article = head.parentElement;
-      setOpen(article, !article.classList.contains("open"));
+      toggle(head.parentElement);
     }
 
     list.addEventListener("click", toggleFrom);
@@ -270,8 +300,13 @@
       if (ev.key !== "Enter" && ev.key !== " ") return;
       var head = ev.target.closest(".ep-head");
       if (!head) return;
+      /* 两道判断，和鼠标那一侧对齐：
+         1) 焦点在篇章链接上时，这次回车/空格是给链接的 —— 少了这一句，
+            preventDefault 会吃掉跳转，键盘用户永远进不去篇章页；
+         2) 其余情况按「切换」，不是写死展开 —— 原来写死 true，键盘只能开不能关。 */
+      if (ev.target.closest("a")) return;
       ev.preventDefault();
-      setOpen(ev.target.closest(".ep-head").parentElement, true);
+      toggle(head.parentElement);
     });
 
     // chip 与下拉框是同一份状态的两个入口，两边都要同步（hash 也是第三个入口）。
@@ -333,17 +368,34 @@
   }
 
   /* ================= 篇章地图 ================= */
+  /* 篇幅的 start/end 是「主体连续话数」，但有些篇章会在后面被回访
+     （「郎拉面篇」41–43，第 125 话又回到那家店的留言板）。这些回访集在
+     episodes[].a 里也标了篇章，于是筛出来的条数会比「第 41–43 话」多。
+     不是错，但页面上必须说清楚，不然读者会以为筛选坏了。 */
+  function arcRevisits(a) {
+    return EPS.filter(function (e) {
+      return (e.a || []).indexOf(a.id) >= 0 && (e.id < a.start || e.id > a.end);
+    });
+  }
+
   function initArcs() {
     var box = $("#arc-list");
     if (!box) return;
+    var totalRev = 0, arcsRev = 0;
+    ARCS.forEach(function (a) {
+      var n = arcRevisits(a).length;
+      if (n) { arcsRev++; totalRev += n; }
+    });
     var note = $("#arc-note");
     if (note) {
       var lastEp = EPS.length ? EPS[EPS.length - 1].id : 0;
-      note.textContent = "共 " + ARCS.length + " 个长篇，已全部按起止话数逐集写入第 1–" +
-        lastEp + " 话的剧集内容，点进去可以直接看该篇章的每一话。";
+      note.textContent = "共 " + ARCS.length + " 个长篇，已按起止话数逐集写入第 1–" +
+        lastEp + " 话的剧集内容。其中 " + arcsRev + " 篇另在范围之外有回访集（合计 " +
+        totalRev + " 话），点进去会一并筛出，所以条数可能比「第 X–Y 话」多一些。";
     }
     var list = ARCS.slice().sort(function (a, b) { return a.start - b.start; });
     box.innerHTML = list.map(function (a) {
+      var rev = arcRevisits(a).length;
       return '<div class="arc ' + (a.status === "later" ? "later" : "") + '" id="' + a.id + '">' +
         '<div class="arc-card">' +
         '<div class="arc-top"><h3>' + esc(a.cn) + "</h3>" +
@@ -352,7 +404,9 @@
         (a.highlight ? '<span class="tag yl">重点</span>' : "") +
         '<span class="range">第 ' + a.start + "–" + a.end + " 话</span></div>" +
         "<p>" + esc(a.summary) + "</p>" +
-        '<div style="margin-top:12px"><a class="btn ghost" href="episodes.html#arc:' + a.id + '">看这个篇章的话数 →</a></div>' +
+        '<div class="arc-foot"><a class="btn ghost" href="episodes.html#arc:' + a.id + '">看这个篇章的话数 →</a>' +
+        (rev ? '<span class="tag gy">另有 ' + rev + " 话回访</span>" : "") +
+        "</div>" +
         "</div></div>";
     }).join("");
   }
@@ -391,9 +445,10 @@
       $("#cd-body").innerHTML =
         '<div class="top' + (c.img ? "" : " ph") + '">' +
         charArtHTML(c) +
-        '<div class="meta"><h3>' + esc(c.cn) + "</h3>" +
+        '<div class="meta"><h2>' + esc(c.cn) + "</h2>" +
         '<div class="jp">' + esc(c.jp) + " / " + esc(c.romaji) + "</div>" +
         "<dl><dt>定位</dt><dd>" + esc(c.role) + "</dd>" +
+        (c.alias.length ? "<dt>别名</dt><dd>" + c.alias.map(esc).join("、") + "</dd>" : "") +
         "<dt>日配</dt><dd>" + esc(c.cvJp) + "</dd>" +
         "<dt>中配</dt><dd>" + esc(c.cvCn) + "</dd>" +
         "<dt>标签</dt><dd>" + c.tags.map(esc).join("、") + "</dd>" +
@@ -403,11 +458,27 @@
         "</div></div>" +
         '<div class="bd"><p>' + esc(c.intro) + "</p>" +
         '<div class="q">' + esc(c.line) + "</div>" +
-        '<div style="margin-top:14px"><a class="btn ghost" href="search.html?q=' + encodeURIComponent(c.cn) + '">搜这个词的全部记录 →</a></div></div>';
+        '<div class="more"><a class="btn ghost" href="search.html?q=' + encodeURIComponent(c.cn) + '">搜这个词的全部记录 →</a></div></div>';
       modal.classList.add("on");
       document.body.style.overflow = "hidden";   // 弹窗打开时别再滚背景
       var close = $("[data-close]", modal);
       if (close) close.focus();
+    }
+
+    /* 焦点陷阱：弹窗声明了 aria-modal="true"，Tab 就不该跑到背后的页面上。
+       不用 offsetParent 判断可见性 —— 弹窗本身是 position:fixed，
+       在它里面的元素 offsetParent 可能为 null，会被误判成隐藏。 */
+    function trapFocus(ev) {
+      if (ev.key !== "Tab" || !modal.classList.contains("on")) return;
+      var items = $$("a[href],button:not([disabled]),[tabindex]:not([tabindex='-1'])", modal)
+        .filter(function (el) { return el.getClientRects().length > 0; });
+      if (!items.length) return;
+      var first = items[0], last = items[items.length - 1];
+      if (ev.shiftKey && document.activeElement === first) {
+        ev.preventDefault(); last.focus();
+      } else if (!ev.shiftKey && document.activeElement === last) {
+        ev.preventDefault(); first.focus();
+      }
     }
 
     box.addEventListener("click", function (ev) {
@@ -426,6 +497,7 @@
       b.addEventListener("click", closeModal);
     });
     modal.addEventListener("click", function (ev) { if (ev.target === modal) closeModal(); });
+    modal.addEventListener("keydown", trapFocus);
     document.addEventListener("keydown", function (ev) {
       if (ev.key === "Escape" && modal.classList.contains("on")) closeModal();
     });
@@ -456,7 +528,10 @@
       INDEX.push({
         ep: ep,
         epCn: ep == null ? "暂无代表话数" : ep + " 话附近",
-        kind: "角色", who: c.cn, text: c.intro, t: c.cn
+        kind: "角色", who: c.cn, text: c.intro, t: c.cn,
+        // 别名只进检索、不进标题：「小八」「哈奇瓦乐」都能翻到哈奇喵，
+        // 但结果行仍然显示正名，免得一行里堆四个名字。
+        keys: (c.alias || []).join(" ")
       });
     });
 
@@ -469,7 +544,8 @@
       }
       var k = kw.toLowerCase();
       var hits = INDEX.filter(function (r) {
-        return (r.text + " " + r.who + " " + r.t + " " + r.epCn).toLowerCase().indexOf(k) >= 0;
+        return (r.text + " " + r.who + " " + r.t + " " + r.epCn + " " + (r.keys || ""))
+          .toLowerCase().indexOf(k) >= 0;
       });
       var shown = hits.slice(0, 300);
       cnt.textContent = hits.length
@@ -483,9 +559,16 @@
             if (snippet.length > 200) snippet = snippet.slice(0, 200) + "……";
             // 角色条目可能没有代表话数（塞壬、人鱼），这条就不能给跳转链接
             var where = r.ep == null ? esc(r.epCn) : "第 " + r.ep + " 话 · " + esc(r.epCn);
-            var jump = r.ep == null ? "" :
-              '<div style="margin-top:9px"><a class="tag pk" href="episodes.html#' +
-              (r.arc ? "arc:" + r.arc : r.ep) + '">跳到第 ' + r.ep + " 话 →</a></div>";
+            /* 篇章条目链到的是「按篇章筛选」，并没有定位到某一话，
+               所以按钮得说「看这个篇章」，不能跟着写「跳到第 N 话」。 */
+            var jump = "";
+            if (r.arc) {
+              jump = '<div class="jump"><a class="tag pk" href="episodes.html#arc:' + r.arc +
+                '">看「' + esc(r.t) + '」的全部话数 →</a></div>';
+            } else if (r.ep != null) {
+              jump = '<div class="jump"><a class="tag pk" href="episodes.html#' + r.ep +
+                '">跳到第 ' + r.ep + " 话 →</a></div>";
+            }
             return '<div class="hit"><div class="h-top">' +
               '<span class="tag gy">' + esc(r.kind) + "</span> " +
               (r.who ? "<b>（" + esc(r.who) + "）</b> " : "") +

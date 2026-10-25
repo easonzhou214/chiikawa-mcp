@@ -4,19 +4,26 @@
   --pink:#FFE4EC;
   --pink-2:#FFD3E1;
   --pink-deep:#E4698F;
-  --pink-dark:#B93F66;
+  /* 粉底白字专用的深一档。--pink-deep 上的白字只有 3.13:1，
+     做主按钮和选中态都过不了 AA；这个颜色是 4.80:1。
+     浅粉那些（--pink、--pink-2）继续当装饰底，不动。 */
+  --pink-solid:#C54368;
+  --pink-dark:#B03B60;
   --mint:#E4F5EC;
   --mint-2:#CDEBDC;
-  --mint-deep:#3F9E75;
+  --mint-deep:#2E7557;
   --yellow:#FFF2CC;
-  --yellow-deep:#D9A227;
+  --yellow-deep:#8C6412;
   --blue:#E6F1FB;
-  --blue-deep:#3E88C7;
+  --blue-deep:#2F6C9E;
   --purple:#F0E9FB;
-  --purple-deep:#8A6BC7;
+  --purple-deep:#7459A6;
+  /* 三级文字：10.26 / 6.59 / 4.91（米白底），全部过 AA。
+     原来 --ink-3 是 #A8968B，只有 2.72:1 —— 它承担了全站
+     12.5–14px 的辅助信息（日文标题、页脚、统计标签），等于读不清。 */
   --ink:#4C3A32;
-  --ink-2:#7C675C;
-  --ink-3:#A8968B;
+  --ink-2:#6B5648;
+  --ink-3:#796B63;
   --line:#F0E2D8;
   --white:#FFFFFF;
   --shadow:0 6px 20px rgba(190,150,130,.13);
@@ -52,34 +59,36 @@ img{max-width:100%;display:block}
   transition:background .18s,color .18s,transform .18s;
 }
 .nav-links a:hover{background:var(--pink);color:var(--pink-dark);transform:translateY(-1px)}
-.nav-links a.on{background:var(--pink-deep);color:#fff;font-weight:500}
+.nav-links a.on{background:var(--pink-solid);color:#fff;font-weight:500}
 
 /* ============ 通用 ============ */
 .sec{margin:54px 0}
 .sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:20px;flex-wrap:wrap}
-.sec-head h2{margin:0;font-size:23px;letter-spacing:.01em}
+.sec-head h1,.sec-head h2{margin:0;font-size:23px;letter-spacing:.01em}
 .sec-head .sub{font-size:13.5px;color:var(--ink-3)}
 .card{background:var(--white);border-radius:var(--r);box-shadow:var(--shadow);padding:22px}
 .tag{
   display:inline-block;padding:2px 10px;border-radius:var(--r-full);font-size:12px;
   background:var(--mint);color:var(--mint-deep);white-space:nowrap;
 }
+/* 标签文字统一压到 4.6:1 以上。原来这一组是 2.9–4.4，
+   12px 的字摆在那里等于装饰 —— 但它们承载的是可信度、篇章、日期。 */
 .tag.pk{background:var(--pink);color:var(--pink-dark)}
-.tag.yl{background:var(--yellow);color:#96690E}
+.tag.yl{background:var(--yellow);color:var(--yellow-deep)}
 .tag.bl{background:var(--blue);color:var(--blue-deep)}
 .tag.pu{background:var(--purple);color:var(--purple-deep)}
-.tag.gy{background:#F1EFE8;color:#7A756B}
+.tag.gy{background:#F1EFE8;color:#6F6A61}
 .badge-lv{
   display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:1px 8px;
-  border-radius:var(--r-full);background:#FFF7E6;color:#A87A16;border:1px solid #F5E4BC;
+  border-radius:var(--r-full);background:#FFF7E6;color:#906913;border:1px solid #F5E4BC;
 }
 .badge-lv.a{background:#EDF7F1;color:#2F7A58;border-color:#CFE9DC}
 .btn{
   display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:var(--r-full);
-  background:var(--pink-deep);color:#fff;font-size:14.5px;font-weight:500;border:none;cursor:pointer;
-  box-shadow:0 6px 16px rgba(228,105,143,.32);transition:transform .16s,box-shadow .16s;
+  background:var(--pink-solid);color:#fff;font-size:14.5px;font-weight:500;border:none;cursor:pointer;
+  box-shadow:0 6px 16px rgba(197,67,104,.30);transition:transform .16s,box-shadow .16s;
 }
-.btn:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(228,105,143,.4)}
+.btn:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(197,67,104,.38)}
 .btn.ghost{background:var(--white);color:var(--pink-dark);box-shadow:var(--shadow);border:1px solid var(--line)}
 .muted{color:var(--ink-3);font-size:13.5px}
 
@@ -91,16 +100,22 @@ img{max-width:100%;display:block}
 .hero-txt h1 em{font-style:normal;color:var(--pink-deep)}
 .hero-txt p{margin:0 0 20px;color:var(--ink-2);font-size:15px}
 .hero-logo{height:46px;width:auto;border-radius:11px;margin-bottom:16px;box-shadow:0 4px 12px rgba(216,135,178,.34)}
-.hero-art{position:relative;overflow:hidden}
+/* 这里原来是 overflow:hidden，三个 spark 又都放在负偏移上，
+   结果全被裁掉 —— 装饰写了但看不见。改成不裁，负偏移换成固定像素，
+   最远只探出 10px，仍在 .wrap 的 20px 内边距里，不会撑出横向滚动条。 */
+.hero-art{position:relative}
 .hero-art .kv{
-  width:100%;border-radius:var(--r-lg);box-shadow:var(--shadow-lg);
+  /* height:auto 不能省。img 上的 width/height 属性是「表现性提示」，等价于
+     CSS 的 width/height —— 只写 width:100% 的话 1100px 的 height 仍然生效，
+     图会被上下拉着变形，整行高度也跟着翻倍。 */
+  width:100%;height:auto;border-radius:var(--r-lg);box-shadow:var(--shadow-lg);
   animation:bob 4.6s ease-in-out infinite;
 }
 @keyframes bob{0%,100%{transform:translateY(0) rotate(-.5deg)}50%{transform:translateY(-9px) rotate(.5deg)}}
 .spark{position:absolute;border-radius:50%;pointer-events:none}
-.spark.s1{width:14px;height:14px;background:var(--pink-2);top:8%;left:-4%;animation:fl 3.4s ease-in-out infinite}
-.spark.s2{width:10px;height:10px;background:var(--mint-2);bottom:14%;right:-3%;animation:fl 4.2s ease-in-out infinite .5s}
-.spark.s3{width:18px;height:18px;background:var(--yellow);top:52%;left:-7%;animation:fl 5s ease-in-out infinite .9s}
+.spark.s1{width:14px;height:14px;background:var(--pink-2);top:8%;left:-8px;animation:fl 3.4s ease-in-out infinite}
+.spark.s2{width:10px;height:10px;background:var(--mint-2);bottom:14%;right:-6px;animation:fl 4.2s ease-in-out infinite .5s}
+.spark.s3{width:18px;height:18px;background:var(--yellow);top:52%;left:-10px;animation:fl 5s ease-in-out infinite .9s}
 @keyframes fl{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
 
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:26px}
@@ -121,6 +136,23 @@ img{max-width:100%;display:block}
 }
 .entry h3{margin:0 0 6px;font-size:17px}
 .entry p{margin:0;font-size:13.5px;color:var(--ink-3);line-height:1.65}
+/* 图标底色、宽卡片这些原来散在 HTML 的 style 属性里，
+   内联写法的优先级还压过媒体查询，窄屏改不动。 */
+.entry .ic-pk{background:var(--pink)}
+.entry .ic-mt{background:var(--mint)}
+.entry .ic-pu{background:var(--purple)}
+.entry .ic-yl{background:var(--yellow)}
+.entry-wide{margin-top:18px;display:flex;align-items:center;gap:18px}
+.entry-wide .ic{margin:0;flex-shrink:0}
+.entry h3.tight{margin:0 0 4px}
+.entry p.tight{margin:0}
+
+.sec.first{margin-top:34px}
+.btn.ml{margin-left:8px}
+/* 页面开头那段导语，四个页面原来各写一份内联样式 */
+.page-intro{margin:0 0 20px;color:var(--ink-2);font-size:14.5px;max-width:780px}
+.arc-note{margin:0 0 22px}
+.hint{margin:12px 0 0}
 
 /* 今日一话 */
 .today{
@@ -132,9 +164,10 @@ img{max-width:100%;display:block}
   background:rgba(255,255,255,.5);right:-40px;bottom:-50px;
 }
 .today .lab{font-size:12.5px;color:var(--pink-dark);letter-spacing:.08em;font-weight:500}
-.today h3{margin:6px 0 8px;font-size:20px}
 .today h2{margin:6px 0 8px;font-size:20px}
 .today p{margin:0;color:var(--ink-2);font-size:14px;position:relative;z-index:1}
+.today .ln{margin-top:10px}
+.today .ln b{color:var(--pink-dark);font-weight:500}
 .today .acts{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;position:relative;z-index:1}
 
 /* ============ 剧集总览 ============ */
@@ -157,13 +190,23 @@ img{max-width:100%;display:block}
   font-family:inherit;line-height:inherit;margin:0;appearance:none;-webkit-appearance:none;
 }
 .chip:hover{border-color:var(--pink-2);color:var(--pink-dark)}
-.chip.on{background:var(--pink-deep);color:#fff;border-color:var(--pink-deep)}
-.chip:focus-visible{outline:2px solid var(--pink-deep);outline-offset:2px}
+.chip.on{background:var(--pink-solid);color:#fff;border-color:var(--pink-solid)}
+.chip:focus-visible{outline:2px solid var(--pink-solid);outline-offset:2px}
 
 /* 首页「关于这部动画」那张卡片：原来是内联的 grid-template-columns。
    内联样式优先级高于媒体查询，窄屏压不回单列（实测 375px 下仍是两列，
    配图被挤到 126px 宽）。改成类，交给下面的断点处理。 */
 .about-card{display:grid;grid-template-columns:1fr 1.1fr;gap:26px;align-items:center}
+.about-card p{margin:0 0 12px}
+.about-card p:last-child{margin:0}
+.about-img{width:100%;height:auto;border-radius:18px}
+.banner{width:100%;height:auto;border-radius:var(--r-lg);box-shadow:var(--shadow)}
+.card.soft{background:linear-gradient(135deg,#FFF7EC,#FDEFF5)}
+.card h2.sm{margin:0 0 10px;font-size:19px}
+.card .lead{margin:0 0 12px;color:var(--ink-2);font-size:14.5px}
+.card .credit{margin:0 0 10px}
+.noscript-note{margin:26px 0;border-left:3px solid var(--pink-solid);color:var(--ink-2);font-size:14px}
+.noscript-note code{background:var(--cream-2);padding:1px 6px;border-radius:5px;font-size:13px}
 
 /* 视觉上隐藏，但读屏和键盘焦点仍然拿得到。
    给只有 placeholder 的输入框补 label 用 —— placeholder 不是字段名，
@@ -200,7 +243,6 @@ img{max-width:100%;display:block}
 .short{padding:16px 0 4px;border-bottom:1px dashed var(--line)}
 .short:last-child{border-bottom:none}
 .short-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:8px}
-.short-head h4{margin:0;font-size:15px;color:var(--pink-dark)}
 .short-head h3{margin:0;font-size:15px;color:var(--pink-dark)}
 .short p{margin:0 0 12px;font-size:14.2px;color:var(--ink-2);line-height:1.85}
 .lines{background:var(--cream-2);border-radius:var(--r-sm);padding:12px 14px;margin-top:2px}
@@ -231,6 +273,7 @@ img{max-width:100%;display:block}
 .arc-top .jp{font-size:12.5px;color:var(--ink-3)}
 .arc-top .range{font-size:12.5px;color:var(--pink-dark);font-weight:500;margin-left:auto}
 .arc-card p{margin:0;font-size:14px;color:var(--ink-2);line-height:1.85}
+.arc-foot{margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .arc.later .arc-card{background:#FFFDFA;box-shadow:none;border:1px dashed var(--line)}
 .arc.later .arc-card p{color:var(--ink-3)}
 
@@ -258,13 +301,14 @@ img{max-width:100%;display:block}
 .char-detail .box{
   background:var(--cream);border-radius:var(--r-lg);max-width:640px;width:100%;max-height:86vh;
   overflow-y:auto;padding:0;box-shadow:var(--shadow-lg);
+  position:relative;   /* 关闭按钮的定位基准，原来写死在 HTML 的 style 里 */
 }
 .char-detail .top{display:grid;grid-template-columns:190px 1fr;gap:0}
 .char-detail .top img{width:100%;height:100%;object-fit:cover}
 .char-detail .top.ph{min-height:210px}
 .char-detail .top.ph .char-ph{min-height:210px}
 .char-detail .meta{padding:22px 22px 18px}
-.char-detail .meta h3{margin:0 0 3px;font-size:21px}
+.char-detail .meta h2{margin:0 0 3px;font-size:21px}
 .char-detail .meta .jp{color:var(--ink-3);font-size:13px;margin-bottom:12px}
 .char-detail .meta dl{margin:0;font-size:13.5px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px}
 .char-detail .meta dt{color:var(--ink-3)}
@@ -274,10 +318,16 @@ img{max-width:100%;display:block}
   background:var(--white);border-radius:var(--r-sm);padding:13px 15px;font-size:14.5px;
   color:var(--pink-dark);border-left:3px solid var(--pink-2);
 }
+.char-detail .more{margin-top:14px}
+/* 22px 的 × 只有 22px 的点击区，手指和开关都不好按；补到 44×44。
+   位置仍贴在卡片右上角，视觉中心不动。 */
 .char-detail .close{
-  position:absolute;top:14px;right:16px;background:none;border:none;font-size:22px;color:var(--ink-3);
+  position:absolute;top:6px;right:6px;width:44px;height:44px;
+  display:flex;align-items:center;justify-content:center;
+  background:none;border:none;border-radius:50%;font-size:22px;color:var(--ink-3);
   cursor:pointer;line-height:1;
 }
+.char-detail .close:hover{background:rgba(76,58,50,.06);color:var(--ink)}
 
 /* ============ 搜索 ============ */
 .search-big{
@@ -294,6 +344,7 @@ img{max-width:100%;display:block}
 .hit .h-top{font-size:13px;color:var(--ink-3);margin-bottom:5px}
 .hit .h-top b{color:var(--pink-dark);font-weight:500}
 .hit .h-body{font-size:14.5px;line-height:1.8}
+.hit .jump{margin-top:9px}
 /* 原来只有 .hit mark 有样式，剧集页的高亮退化成浏览器默认的纯黄。
    两处高亮提成公共规则，颜色一致。 */
 mark{background:#FFE9A8;color:var(--ink);padding:0 3px;border-radius:4px}
@@ -301,8 +352,8 @@ mark{background:#FFE9A8;color:var(--ink);padding:0 3px;border-radius:4px}
 
 /* ============ 关于 ============ */
 .prose{background:var(--white);border-radius:var(--r);padding:26px 28px;box-shadow:var(--shadow);font-size:14.5px;line-height:1.95;color:var(--ink-2)}
-.prose h3{margin:24px 0 10px;font-size:16.5px;color:var(--ink)}
-.prose h3:first-child{margin-top:0}
+.prose h2,.prose h3{margin:24px 0 10px;font-size:16.5px;color:var(--ink)}
+.prose h2:first-child,.prose h3:first-child{margin-top:0}
 .prose ul{margin:8px 0;padding-left:20px}
 .prose li{margin-bottom:5px}
 .prose table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
@@ -348,8 +399,6 @@ mark{background:#FFE9A8;color:var(--ink);padding:0 3px;border-radius:4px}
    list_entries(kind, filter?, offset?, limit?) 会断成两半，很难读。
    表格里空间不够时让这一格自己撑宽，而不是把签名切开。 */
 .prose td code{white-space:nowrap}
-.prose table{table-layout:auto}
-.prose h4{margin:18px 0 8px;font-size:15px;color:var(--ink)}
 .prose p{margin:9px 0}
 
 /* ============ 页脚 ============ */
@@ -358,10 +407,22 @@ footer{
   font-size:12.5px;color:var(--ink-3);line-height:1.9;
 }
 footer .lk{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:12px}
-footer .lk a:hover{color:var(--pink-deep)}
+footer .lk a:hover{color:var(--pink-dark)}
 
 .empty-state{text-align:center;padding:50px 20px;color:var(--ink-3)}
 .empty-state .big{font-size:40px;margin-bottom:12px}
+
+/* 键盘焦点统一可见。原来只有 .chip 有 focus-visible，
+   其余可聚焦元素（按钮、卡片、剧集头、导航）都靠浏览器默认或干脆没有。 */
+:focus-visible{outline:2px solid var(--pink-solid);outline-offset:2px}
+.btn:focus-visible,.entry:focus-visible,.char:focus-visible,.ep-head:focus-visible{outline-offset:3px}
+
+/* 尊重系统的「减少动态效果」：两个无限动画和两处过渡都收掉。
+   无限 bob/fl 对前庭敏感的人是实打实的干扰，不是审美偏好。 */
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+}
 
 @media (max-width:900px){
   .hero{grid-template-columns:1fr;gap:24px}
@@ -373,7 +434,10 @@ footer .lk a:hover{color:var(--pink-deep)}
 }
 @media (max-width:600px){
   .entries,.chars{grid-template-columns:1fr}
-  .nav-in{padding:8px 14px}
+  /* 7 个导航项在 335px 里挤成一列五行，光导航就吃掉半个首屏。
+     让 .nav-in 可换行、链接独占一行：logo 一行，链接折成两行，高度减半。 */
+  .nav-in{padding:8px 14px;flex-wrap:wrap;gap:6px 10px}
+  .nav-links{margin-left:0;width:100%;order:2;gap:4px}
   .nav-links a{padding:6px 10px;font-size:13px}
   .sec{margin:38px 0}
   .ep-head{padding:14px}
