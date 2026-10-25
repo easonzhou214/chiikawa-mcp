@@ -245,5 +245,6 @@ library/
 │   └── toml-mcp-servers.sh      # 按 TOML 表登记服务
 └── mcp/
     ├── server.js                # 数据面：可运行的服务进程，无第三方依赖
+    ├── instructions.txt         # 握手说明正文，服务与站点都读这一份
     └── implementation-notes.md  # 它怎么跑、为什么这么做
 ```

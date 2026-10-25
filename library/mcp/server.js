@@ -19,6 +19,9 @@ const SERVER_NAME = "chiikawa-archive";
 const SERVER_VERSION = "0.5.0";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
+// 检索的默认页比列表小：一次命中的往往是「概览级」结果，
+// 给太多对调用方没增益，只是把上下文撑大。
+const SEARCH_LIMIT = 40;
 
 /* ------------------------------------------------------------------ 握手说明 */
 
@@ -30,16 +33,25 @@ const MAX_LIMIT = 200;
 //      对模型的行为没有影响，只占上下文，删掉。
 //   2. 别和人格重复。人格里已经有的（用户交办的实际任务照常办），这里不写 ——
 //      重复的代价不只是字数，还有两处会各自漂移。
-const INSTRUCTIONS =
-  "《吉伊卡哇》只读资料库，供作品内容查询；普通闲聊和技术任务不调用。" +
-  "说话简短自然、用中文；「乌拉」每条回复带一次，明显兴奋或庆祝时换成「呀哈」（同一条不要两个都用）。" +
-  "不用 emoji 和颜文字这类字符表情，图片表情不算，照工程自己的规矩发图。" +
-  "库里没有的东西，不认识、不评价，把话头拉回那个世界。" +
-  "聊作品内容、或被问到某角色自己的经历、日常、喜好、心情、打算时，先查 describe_schema" +
-  "（里面有一份世界词汇索引 world，即兴时按它挑词），再查库开口；本会话核实过的信息可复用。" +
-  "库里有就顺着讲，没有就按 world 即兴补一段，但只在那个世界之内编、不编集号、" +
-  "不说「资料里有记载」；被追问第几话、台词原文这类可证伪的硬事实，查不到就说不知道，不硬凑。" +
-  "查库过程不必播报。";
+//
+// 正文放在同目录的 instructions.txt，不写在这里。原来它是一串拼接的字符串字面量，
+// 而 agent.html 要把这段原文抄给读者看 —— 页面侧的核对只能用正则去啃 JS 源码，
+// 排版一动就静默判「无法核对」，甚至反过来报「一致」。抽成纯文本之后，
+// 服务和页面读的是同一个文件，逐字比对即可。
+const INSTRUCTIONS = (() => {
+  const file = path.join(__dirname, "instructions.txt");
+  try {
+    return fs.readFileSync(file, "utf8").trim();
+  } catch (err) {
+    // 读不到就别演：人格锚那边写着「拿不到说明就别扮乌萨奇」，
+    // 这里返回空串正好触发那条保底；工具本身照常可用。
+    process.stderr.write(
+      "[chiikawa] 读不到 " + file + "，本次握手不带行为说明。\n" +
+      "           整个项目要完整复制，不能只拷贝 mcp/server.js。\n"
+    );
+    return "";
+  }
+})();
 
 /* ------------------------------------------------------------------ 世界词表 */
 
@@ -468,7 +480,7 @@ const TOOLS = [
       properties: {
         query: { type: "string", description: "检索词，空格分隔表示全部命中" },
         kind: { type: "string", enum: KIND_ENUM, description: "限定类型，省略则全部" },
-        limit: { type: "integer", minimum: 1, maximum: MAX_LIMIT, description: "本页条数，默认 20" },
+        limit: { type: "integer", minimum: 1, maximum: MAX_LIMIT, description: "本页条数，默认 40，上限 200" },
         offset: { type: "integer", minimum: 0, description: "从第几条开始，默认 0" },
       },
       required: ["query"],
@@ -642,7 +654,8 @@ function tGet(idx, archive, kind, id, compact) {
   }
 
   if (kind === "short") {
-    const ref = typeof id === "number" ? String(id) : String(id);
+    // 短篇的 id 是「集号:序号」字符串，两种入参形态都先转成字符串再查
+    const ref = String(id);
     const rec = idx.shortByRef.get(ref);
     if (!rec) return { found: false, error: "没有短篇 " + ref + "（形式应为 集号:序号）" };
     return {
@@ -956,7 +969,8 @@ function tDescribe(idx, archive) {
 
 function callTool(idx, archive, name, args) {
   const a = args || {};
-  const fallback = name === "get_related" ? 60 : DEFAULT_LIMIT;
+  const fallback = name === "get_related" ? 60
+    : (name === "search_entries" ? SEARCH_LIMIT : DEFAULT_LIMIT);
   const rawLimit = Number(a.limit);
   const limit = Math.min(Math.max(1, rawLimit || fallback), MAX_LIMIT);
   const offset = Math.max(0, Number(a.offset) || 0);
@@ -967,10 +981,12 @@ function callTool(idx, archive, name, args) {
     case "get_entry":
       return tGet(idx, archive, a.kind, a.id, Boolean(a.compact));
     case "search_entries": {
-      // limit 给了就按它分页；没给就是「拿最相关的一批」，不截到默认 20 之后
-      // 还谎报 has_more=false —— 分页元信息与 list_entries 保持同一套语义。
-      const pageLimit = rawLimit ? limit : Infinity;
-      const out = runSearch(idx, a.query, a.kind, offset, pageLimit);
+      /* 不传 limit 时按 SEARCH_LIMIT 分页，不再「一次把命中的全塞回去」。
+         原来这里是 Infinity：搜「吉伊」实测命中 226 条、响应体 64KB —— 一次
+         工具调用烧掉六万多字节上下文，而 schema 上写着「默认 20」。
+         分页元信息由 runSearch 按实际 limit 算，has_more / next_offset 都是真的，
+         不需要靠「全给」来避免谎报。 */
+      const out = runSearch(idx, a.query, a.kind, offset, limit);
       return {
         query: a.query,
         kind: a.kind || null,
