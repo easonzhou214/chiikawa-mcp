@@ -12,6 +12,7 @@ set -euo pipefail
 #   ./install.sh --yes              按计划写入
 #   ./install.sh --uninstall --yes  撤销写入
 #   ./install.sh --print            只输出注册信息，供手工粘贴到任意宿主
+#   ./install.sh --into <项目> --persona <角色>   把某个角色的人格注进那个项目
 #
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,9 +21,16 @@ DATA_DIR="$PROJECT_ROOT/js"
 SERVER="$SELF_DIR/mcp/server.js"
 SKILL_FILE="$SELF_DIR/skill/SKILL.md"
 TRIGGER_FILE="$SELF_DIR/skill/resident-trigger.md"
-PERSONA_FILE="$SELF_DIR/persona/usagi-persona.md"
+PERSONA_DIR="$SELF_DIR/persona"
 ADAPTER_DIR="$SELF_DIR/adapters"
 SERVER_NAME="chiikawa"
+
+# 人格是**按项目**注入的，所以「注入哪个角色」必须在命令行上选，不能写死。
+# 默认仍是乌萨奇：老的调用方式（不带 --persona）行为不变。
+PERSONA_ID="usagi"
+PERSONA_FILE=""
+PERSONA_TITLE=""
+PERSONA_EXPLICIT=0
 
 APPLY=0
 PRINT_ONLY=0
@@ -62,6 +70,8 @@ while [ $# -gt 0 ]; do
     --backup)   BACKUP=1 ;;
     --host)     shift; ONLY_HOST="${1:-}" ;;
     --into)     shift; TARGET_PROJECT="${1:-}" ;;
+    --persona|--character)
+                shift; PERSONA_ID="${1:-}"; PERSONA_EXPLICIT=1 ;;
     --verify)
       VERIFY=1
       # 值是可选的：给了目录就检查它，没给就只标了 VERIFY，到执行处再报清楚
@@ -76,6 +86,12 @@ while [ $# -gt 0 ]; do
         [ -f "$a" ] || continue
         ad_list="${ad_list}${ad_list:+、}$(basename "$a" .sh)"
       done
+      # 人格 list 也从目录里现取 —— 加一个角色只要放一份模板，帮助文本自动跟上。
+      p_list=""
+      for p in "$PERSONA_DIR"/*-persona.md; do
+        [ -f "$p" ] || continue
+        p_list="${p_list}${p_list:+、}$(basename "$p" -persona.md)（$(sed -n '1s/^# *//p' "$p")）"
+      done
       cat <<EOS
 
 吉伊卡哇资料库 · 安装器
@@ -89,7 +105,12 @@ while [ $# -gt 0 ]; do
   bash install.sh --backup           写入前留一份配置副本（默认不留）
   bash install.sh --host <名字>      只跑指定的适配器，可选：$ad_list
   bash install.sh --into <项目路径>   把人格锚注入到这个项目里（不指定就不注入）
+  bash install.sh --persona <角色>   注入哪个角色的人格，默认 ${PERSONA_ID}
+                                     可选：${p_list:-（persona/ 里一个都没有）}
   bash install.sh --verify <路径>     检查这些位置下已注入的人格是否过期（可重复，只读）
+
+人格是按项目注入的：同一个服务可以伺候「这个项目是乌萨奇、那个项目是小八」——
+角色只写在项目说明文件里，不进服务登记。换角色就是对新项目再跑一次 --into。
 
 环境变量：
 
@@ -101,7 +122,10 @@ EOS
       exit 0 ;;
     *) die "不认识的参数：$1" ;;
   esac
-  shift
+  # 带值的参数在 case 里已经 shift 过一次；这里再 shift 时可能已经到底了。
+  # 直接写 shift 会返回 1，配上 set -e 就是「退出码 1、一个字不印」——
+  # 参数少给一个值，用户看到的是静默失败。
+  [ $# -gt 0 ] && shift || true
 done
 
 # 目标项目要在这里校验：适配器的 detect 是静默的，路径写错了会「什么都不发生」，
@@ -125,6 +149,22 @@ if [ -n "$ONLY_HOST" ]; then
   fi
 fi
 
+# --persona 同理，而且更隐蔽：模板找不到时适配器会「静默什么都不做」，
+# 用户看到的是一份没被注入、但退出码 0 的项目。所以名字在这里就核。
+[ -n "$PERSONA_ID" ] || die "--persona 后面要给一个角色名"
+PERSONA_FILE="$PERSONA_DIR/$PERSONA_ID-persona.md"
+if [ ! -f "$PERSONA_FILE" ]; then
+  avail_p=""
+  for p in "$PERSONA_DIR"/*-persona.md; do
+    [ -f "$p" ] || continue
+    avail_p="${avail_p}${avail_p:+、}$(basename "$p" -persona.md)（$(sed -n '1s/^# *//p' "$p")）"
+  done
+  die "没有这个角色的人格模板：$PERSONA_ID
+  可用的有：${avail_p:-（persona/ 里一个都没有）}
+  模板文件名形如 persona/<角色>-persona.md"
+fi
+PERSONA_TITLE="$(sed -n '1s/^# *//p' "$PERSONA_FILE")"
+
 resolve_path() {
   local p="$1"
   if readlink -f "$p" >/dev/null 2>&1; then
@@ -142,6 +182,7 @@ printf '%s\n' "─────────────────────�
 # 表现是「盘点里少了这一类登记」，而那看起来和「没装过」一模一样。
 export CHIIKAWA_NAME="$SERVER_NAME"
 export CHIIKAWA_PERSONA="$PERSONA_FILE"
+export CHIIKAWA_PERSONA_ID="$PERSONA_ID"
 export CHIIKAWA_TARGET_PROJECT="$TARGET_PROJECT"
 export CHIIKAWA_SERVER="$SERVER"
 export CHIIKAWA_NODE="$(resolve_path "${CHIIKAWA_NODE:-$(command -v node 2>/dev/null || true)}")"
@@ -186,9 +227,12 @@ if [ "$VERIFY" -eq 1 ]; then
     while IFS= read -r vcfg; do
       [ -n "$vcfg" ] || continue
       vstatus="$("$vad" status "$vcfg" 2>/dev/null)" && vrc=0 || vrc=$?
+      # status 的第一列是状态词，第二列起才是位置（人格那层还会带上注的是哪个角色）。
+      # 位置从这里取，不用自己拼 —— 拼的那份迟早和适配器的说法分叉。
+      vdetail="$(printf '%s' "$vstatus" | cut -f2- )"
       case "$vrc" in
-        0)  ok    "[$vad_name] 一致：$vcfg"; OKN=$((OKN+1)); CHECKED=$((CHECKED+1)) ;;
-        1)  warn  "[$vad_name] 过期：$vcfg"
+        0)  ok    "[$vad_name] 一致：${vdetail:-$vcfg}"; OKN=$((OKN+1)); CHECKED=$((CHECKED+1)) ;;
+        1)  warn  "[$vad_name] 过期：${vdetail:-$vcfg}"
                   STALE=$((STALE+1)); CHECKED=$((CHECKED+1)) ;;
         3)  : ;;  # 该位置没有本资料库的登记，不算问题，也不刷屏
         2)  : ;;  # 这个适配器没实现 status，不是错误
@@ -375,8 +419,14 @@ fi
 if [ "$UNINSTALL" -eq 0 ] && [ -n "$TARGET_PROJECT" ]; then
   step "5. 人格锚"
   ok "将注入到：$TARGET_PROJECT"
+  ok "角色：${PERSONA_TITLE:-$PERSONA_ID}（${PERSONA_ID}）"
   info "把人格模板的正文直接写进项目说明文件，不另建人格文件或目录"
   info "人格是唯一不会被自动发现的一层，只能这样显式放进去"
+  info "角色随项目走：同机另一个项目可以注入别人，服务那边不用改"
+elif [ "$UNINSTALL" -eq 0 ] && [ "$PERSONA_EXPLICIT" -eq 1 ]; then
+  step "5. 人格锚"
+  warn "--persona 只有在配 --into <项目路径> 时才有意义"
+  info "人格是按项目注入的，没有「全局默认角色」这种东西"
 fi
 
 # ── 6. 适配器 ─────────────────────────────────────────────
@@ -399,6 +449,7 @@ export CHIIKAWA_SERVER="$SERVER"
 export CHIIKAWA_NAME="$SERVER_NAME"
 export CHIIKAWA_BACKUP="$BACKUP"
 export CHIIKAWA_PERSONA="$PERSONA_FILE"
+export CHIIKAWA_PERSONA_ID="$PERSONA_ID"
 export CHIIKAWA_TARGET_PROJECT="$TARGET_PROJECT"
 if [ "$WITH_SKILL" -eq 1 ]; then
   export CHIIKAWA_SKILL="$SKILL_FILE"
@@ -523,22 +574,23 @@ if [ "$APPLY" -eq 1 ] && [ "$UNINSTALL" -eq 0 ]; then
 EOS
 
   if [ -n "$TARGET_PROJECT" ] && [ "$PERSONA_TOUCHED" -eq 1 ]; then
-    printf '  人格锚已注入：%s\n' "$TARGET_PROJECT"
+    printf '  人格锚已注入：%s（%s）\n' "$TARGET_PROJECT" "${PERSONA_TITLE:-$PERSONA_ID}"
     printf '  那个项目现在自包含 —— 挪位置、复制给别人，人格都跟着走。\n'
   elif [ -n "$TARGET_PROJECT" ]; then
     # 指定了项目却没走到注入那一步：最常见是 --host 把承担人格的适配器筛掉了。
     # 这里必须如实说，报「已注入」而其实没注入，比不报更糟。
     warn "人格锚没有注入：$TARGET_PROJECT"
     info "承担人格的是 $PERSONA_ADAPTER 适配器，本次没有跑到它"
-    info "单独注入：bash install.sh --into <项目路径> --yes"
+    info "单独注入：bash install.sh --into <项目路径> --persona <角色> --yes"
   else
     cat <<'EOS'
   但**人格那层不会自动生效** —— 它没有可被自动发现的落点，只能显式放进去。
-  想给某个项目加上人格，对它跑一次：
+  想给某个项目加上人格，对它跑一次（--persona 不写就是 usagi）：
 
-      bash install.sh --into <项目路径> --yes
+      bash install.sh --into <项目路径> --persona hachiware --yes
 
-  只影响那一个项目；本机其它项目不受影响。撤销时同一句换成 --uninstall。
+  只影响那一个项目；本机其它项目不受影响，可以注入别的角色。
+  撤销时同一句换成 --uninstall。
 
 EOS
   fi
@@ -550,7 +602,7 @@ EOS
       bash install.sh --print-trigger
 
   怎么确认真的通了：开一个新会话，问一句这部作品相关的问题
-  （比如「乌萨奇出现在哪些集」），看它有没有去查而不是凭记忆答。
+  （比如「你住在哪」），看它有没有去查、口吻是不是那个角色，而不是凭记忆答。
 
 EOS
 fi

@@ -62,6 +62,15 @@ bash library/install.sh --yes    # 按计划登记
 
 安装器会校验数据、跑一次真实握手自检，然后把服务与说明登记到宿主对应位置；撤销用 `--uninstall --yes`。只想手工登记的话，`bash library/install.sh --print` 会输出可直接粘贴的注册信息。
 
+**服务与方法说明是用户级的**（装一次，本机所有项目都能用），**人格是按项目注入的**，一个项目选一个角色：
+
+```bash
+bash library/install.sh --into <项目路径> --yes                     # 注入乌萨奇（默认）
+bash library/install.sh --into <项目路径> --persona hachiware --yes  # 注入小八
+```
+
+角色名单从 `library/persona/` 现取，加一个角色就是新建一份 `<名字>-persona.md`。同一个服务能同时伺候两个项目、各演各的——`--verify` 会告诉你每个项目注的是谁。
+
 服务是 **stdio 形态**：没有端口、没有 URL、没有鉴权，宿主按需把 `server.js` 拉起来当子进程。登记形状大致是：
 
 ```json

@@ -1,14 +1,15 @@
 /*
  * 接入页（agent.html）的辅助脚本。
  *
- * 这一页把两段原文抄了进来（服务说明、注入的 agent 正文），好在纯静态站上也
+ * 这一页把几段原文抄了进来（服务说明、两份注入的 agent 正文），好在纯静态站上也
  * 看得到。抄的东西会过期，所以这里读 library/ 里的真文件比一遍，对不上就标出来。
  *
  * 读不到 library/ 时（发布出去的站点就是这样）降级成一句说明，不当错误。
  *
  * 比对的两侧都是纯文本：说明正文在 library/mcp/instructions.txt，
- * 人格在 library/persona/usagi-persona.md。原来说明是写在 server.js 里的
- * 一串字符串字面量，这边只能拿正则去啃源码 —— 排版一动就静默失效。
+ * 人格在 library/persona/<角色>-persona.md —— 每多一个角色，这里多一行。
+ * 原来说明写在 server.js 里的一串字符串字面量时，这边只能拿正则去啃源码，
+ * 排版一动就静默失效。
  */
 (function () {
   function $(id) { return document.getElementById(id); }
@@ -37,7 +38,8 @@
   }
 
   var CHECKS = [
-    { key: "persona", label: "注入的 agent 正文", file: "library/persona/usagi-persona.md" },
+    { key: "persona-usagi", label: "乌萨奇的人格正文", file: "library/persona/usagi-persona.md" },
+    { key: "persona-hachiware", label: "小八的人格正文", file: "library/persona/hachiware-persona.md" },
     { key: "instructions", label: "服务握手说明", file: "library/mcp/instructions.txt" }
   ];
 
@@ -58,7 +60,7 @@
     // 一个文件都读不到 —— 这是发布出去的站点，不是错误
     if (!rows.some(function (r) { return r.src != null; })) {
       render("这一页读不到 <code>library/</code>，没法自动核对——发布出去的站点本来就不带这个目录。" +
-        "页面里那两段原文只是快照，以仓库里的文件为准。");
+        "页面里那几段原文只是快照，以仓库里的文件为准。");
       return;
     }
 
@@ -80,7 +82,7 @@
       parts.push("有 <b>" + unknown.join("、") + "</b> 没能核对（页面里没有对应段落，或源文件读不到）。");
     }
     if (!drift.length && !unknown.length) {
-      parts.push("页面里这两段原文与 <code>library/</code> 里的源文件逐字一致。");
+      parts.push("页面里这几段原文与 <code>library/</code> 里的源文件逐字一致。");
     } else if (ok) {
       parts.push("另外 " + ok + " 段已核对一致。");
     }

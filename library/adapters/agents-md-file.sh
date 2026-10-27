@@ -3,6 +3,7 @@ set -euo pipefail
 
 NAME="${CHIIKAWA_NAME:?缺少 CHIIKAWA_NAME}"
 PERSONA="${CHIIKAWA_PERSONA:-}"
+PERSONA_ID="${CHIIKAWA_PERSONA_ID:-}"
 
 if [ -z "$PERSONA" ]; then
   if [ "${1:-}" = "detect" ]; then exit 0; fi
@@ -11,12 +12,30 @@ if [ -z "$PERSONA" ]; then
 fi
 [ -f "$PERSONA" ] || { printf '找不到人格模板：%s\n' "$PERSONA" >&2; exit 1; }
 
-SRC="$(cd "$(dirname "$PERSONA")" && pwd)/$(basename "$PERSONA")"
-BASENAME="$(basename "$SRC")"
-LEGACY_OPEN="<!-- >>> ${NAME} 资料库 · 人格锚（install.sh 写入，撤销请跑 --uninstall） >>>"
-LEGACY_CLOSE="<!-- <<< ${NAME} 资料库 · 人格锚 <<<"
-MARK_OPEN="$LEGACY_OPEN -->"
-MARK_CLOSE="$LEGACY_CLOSE -->"
+PERSONA_DIR="$(cd "$(dirname "$PERSONA")" && pwd)"
+SRC="$PERSONA_DIR/$(basename "$PERSONA")"
+BASENAME="$(basename "$PERSONA")"
+
+# 标记行带人格 id（`人格锚：hachiware`）。三个理由，都是实测踩出来的：
+#   · 项目注入的是哪个角色，文件自己说得清，不用靠命令行回想去猜；
+#   · 盘点是只读的，拿不到「这次装的是谁」，只能从标记里读回来 —— 否则给小八
+#     注过的项目会被拿去和乌萨奇的模板比，永远报「过期」；
+#   · 换角色就是整段替换，id 在标记里，替换前后一眼能看出换了。
+#
+# 但**识别一律按前缀**，不按整行相等：老版本的标记没有 id 那一段，还有一份
+# 连 `-->` 都没闭合。按整行比就认不出那些段 —— 认不出就撤不掉，用户会以为撤干净了。
+MARK_PREFIX="<!-- >>> ${NAME} 资料库 · 人格锚"
+CLOSE_BARE="<!-- <<< ${NAME} 资料库 · 人格锚 <<<"
+MARK_CLOSE="$CLOSE_BARE -->"
+
+open_marker() {
+  local pid="$1"
+  if [ -n "$pid" ]; then
+    printf '<!-- >>> %s 资料库 · 人格锚：%s（install.sh 写入，撤销请跑 --uninstall） >>> -->' "$NAME" "$pid"
+  else
+    printf '<!-- >>> %s 资料库 · 人格锚（install.sh 写入，撤销请跑 --uninstall） >>> -->' "$NAME"
+  fi
+}
 
 ROOT=""; AGENTS=""; LEGACY_COPY=""
 setup_for() {
@@ -29,12 +48,38 @@ setup_for() {
   fi
 }
 
+has_block() { [ -f "$AGENTS" ] && grep -qF "$MARK_PREFIX" "$AGENTS"; }
+
 managed_block() {
-  awk -v opened="$MARK_OPEN" -v closed="$MARK_CLOSE" -v old_opened="$LEGACY_OPEN" -v old_closed="$LEGACY_CLOSE" '
-    $0 == opened || $0 == old_opened { inside = 1 }
+  awk -v prefix="$MARK_PREFIX" -v closed="$MARK_CLOSE" -v closed_bare="$CLOSE_BARE" '
+    index($0, prefix) == 1 { inside = 1 }
     inside { print }
-    $0 == closed || $0 == old_closed { inside = 0 }
+    $0 == closed || $0 == closed_bare { inside = 0 }
   ' "$AGENTS"
+}
+
+# 从标记行里读回「这个项目注入的是哪个角色」。老标记没有这一段，返回空。
+persona_id_in_block() {
+  awk -v prefix="$MARK_PREFIX" '
+    index($0, prefix) == 1 {
+      line = $0
+      if (!sub(/^.*人格锚：/, "", line)) exit
+      sub(/（.*$/, "", line)
+      print line
+      exit
+    }
+  ' "$AGENTS"
+}
+
+# 盘点时该拿哪份模板去比：这个项目自己那份，不是本次命令行指定的那份。
+target_src() {
+  local pid
+  pid="$(persona_id_in_block)"
+  if [ -n "$pid" ] && [ -f "$PERSONA_DIR/$pid-persona.md" ]; then
+    printf '%s' "$PERSONA_DIR/$pid-persona.md"
+  else
+    printf '%s' "$SRC"
+  fi
 }
 
 remove_legacy_copy() {
@@ -50,9 +95,9 @@ remove_legacy_copy() {
 strip_block() {
   local target="$1" temporary
   temporary="$(mktemp)"
-  awk -v opened="$MARK_OPEN" -v closed="$MARK_CLOSE" -v old_opened="$LEGACY_OPEN" -v old_closed="$LEGACY_CLOSE" '
-    $0 == opened || $0 == old_opened { pending_blank = 0; skip = 1; next }
-    skip { if ($0 == closed || $0 == old_closed) skip = 0; next }
+  awk -v prefix="$MARK_PREFIX" -v closed="$MARK_CLOSE" -v closed_bare="$CLOSE_BARE" '
+    index($0, prefix) == 1 { pending_blank = 0; skip = 1; next }
+    skip { if ($0 == closed || $0 == closed_bare) skip = 0; next }
     /^$/ { if (pending_blank) print ""; pending_blank = 1; next }
     {
       if (pending_blank) { print ""; pending_blank = 0 }
@@ -70,10 +115,14 @@ strip_block() {
   fi
 }
 
-block() {
-  printf '%s\n' "$MARK_OPEN"
-  cat "$SRC"
-  if [ -s "$SRC" ] && [ "$(tail -c1 "$SRC" | wc -l | tr -d ' ')" = "0" ]; then
+# 第 2 个参数是「按谁的标记写」：apply/installed 用命令行指定的那个，
+# status 用文件里登记的那个 —— 否则给小八注过的项目永远比不平。
+block_from() {
+  local file="$1" pid="${2:-$PERSONA_ID}"
+  open_marker "$pid"
+  printf '\n'
+  cat "$file"
+  if [ -s "$file" ] && [ "$(tail -c1 "$file" | wc -l | tr -d ' ')" = "0" ]; then
     printf '\n'
   fi
   printf '%s\n' "$MARK_CLOSE"
@@ -91,9 +140,9 @@ CONFLICT_RE='(emoji|emote|颜文字|表情|persona|人格|扮演|口癖|语气|�
 
 conflict_hits() {
   [ -f "$AGENTS" ] || return 0
-  awk -v o="$MARK_OPEN" -v c="$MARK_CLOSE" -v oo="$LEGACY_OPEN" -v oc="$LEGACY_CLOSE" '
-    $0 == o || $0 == oo { inside = 1; next }
-    inside { if ($0 == c || $0 == oc) inside = 0; next }
+  awk -v prefix="$MARK_PREFIX" -v closed="$MARK_CLOSE" -v closed_bare="$CLOSE_BARE" '
+    index($0, prefix) == 1 { inside = 1; next }
+    inside { if ($0 == closed || $0 == closed_bare) inside = 0; next }
     { print NR "\t" $0 }
   ' "$AGENTS" | grep -iE "$CONFLICT_RE" || true
 }
@@ -130,7 +179,7 @@ case "${1:-}" in
         for proj in "$root" "$root"/*; do
           [ -d "$proj" ] || continue
           [ -f "$proj/AGENTS.md" ] || continue
-          grep -qxF -e "$MARK_OPEN" -e "$LEGACY_OPEN" "$proj/AGENTS.md" || continue
+          grep -qF "$MARK_PREFIX" "$proj/AGENTS.md" || continue
           printf '%s\n' "$proj"
         done
       done
@@ -144,31 +193,34 @@ case "${1:-}" in
       printf '缺失\t%s\n' "$AGENTS"
       exit 3
     fi
-    if ! grep -qxF -e "$MARK_OPEN" -e "$LEGACY_OPEN" "$AGENTS"; then
+    if ! has_block; then
       printf '无标记段\t%s\n' "$AGENTS"
       exit 3
     fi
-    if cmp -s <(managed_block) <(block); then
-      printf '一致\t%s\n' "$AGENTS"
+    pid="$(persona_id_in_block)"
+    if cmp -s <(managed_block) <(block_from "$(target_src)" "$pid"); then
+      printf '一致\t%s（人格 %s）\n' "$AGENTS" "${pid:-旧版标记，未记角色}"
       exit 0
     fi
-    printf '过期\t%s\n' "$AGENTS"
+    printf '过期\t%s（人格 %s）\n' "$AGENTS" "${pid:-旧版标记，未记角色}"
     exit 1
     ;;
 
   installed)
     setup_for "${2:?}" || exit 1
     [ -f "$AGENTS" ] || exit 1
-    cmp -s <(managed_block) <(block)
+    has_block || exit 1
+    cmp -s <(managed_block) <(block_from "$SRC" "$PERSONA_ID")
     ;;
 
   plan)
     setup_for "${2:?}" || exit 1
     printf '把人格正文直接注入目标项目：%s\n' "$ROOT"
-    printf '    · 人格模板：%s\n' "$SRC"
+    printf '    · 人格：%s（%s）\n' "${PERSONA_ID:-未指定 id}" "$SRC"
     if [ -f "$AGENTS" ]; then
-      if grep -qxF -e "$MARK_OPEN" -e "$LEGACY_OPEN" "$AGENTS"; then
-        printf '    ~ AGENTS.md（替换本资料库的旧段）\n'
+      if has_block; then
+        printf '    ~ AGENTS.md（替换本资料库的旧段%s）\n' \
+          "$(pid="$(persona_id_in_block)"; [ -n "$pid" ] && [ "$pid" != "$PERSONA_ID" ] && printf '，原为人格 %s' "$pid")"
       else
         printf '    ~ AGENTS.md（追加正文，保留已有内容）\n'
       fi
@@ -179,27 +231,27 @@ case "${1:-}" in
       printf '    - %s（删除旧副本，并清理变空的目录）\n' "${LEGACY_COPY#$ROOT/}"
     fi
     report_conflicts
-    block
+    block_from "$SRC" "$PERSONA_ID"
     printf '\n%s\n' '（撤销时摘掉这一整段；若文件因此变空则一并删除。）'
     ;;
 
   apply)
     setup_for "${2:?}" || exit 1
-    if [ -f "$AGENTS" ] && grep -qxF -e "$MARK_OPEN" -e "$LEGACY_OPEN" "$AGENTS"; then
+    if [ -f "$AGENTS" ] && has_block; then
       strip_block "$AGENTS"
     fi
     if [ -s "$AGENTS" ] && [ "$(tail -c1 "$AGENTS" | wc -l | tr -d ' ')" = "0" ]; then
       printf '\n' >> "$AGENTS"
     fi
     printf '\n' >> "$AGENTS"
-    block >> "$AGENTS"
+    block_from "$SRC" "$PERSONA_ID" >> "$AGENTS"
     remove_legacy_copy
     ;;
 
   remove)
     setup_for "${2:?}" || exit 1
     [ -f "$AGENTS" ] || exit 1
-    grep -qxF -e "$MARK_OPEN" -e "$LEGACY_OPEN" "$AGENTS" || exit 1
+    has_block || exit 1
     strip_block "$AGENTS"
     remove_legacy_copy
     ;;
