@@ -40,6 +40,7 @@
   var CHECKS = [
     { key: "persona-usagi", label: "乌萨奇的人格正文", file: "library/persona/usagi-persona.md" },
     { key: "persona-hachiware", label: "小八的人格正文", file: "library/persona/hachiware-persona.md" },
+    { key: "persona-chiikawa", label: "吉伊的人格正文", file: "library/persona/chiikawa-persona.md" },
     { key: "instructions", label: "服务握手说明", file: "library/mcp/instructions.txt" }
   ];
 

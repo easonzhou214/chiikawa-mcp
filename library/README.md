@@ -71,7 +71,7 @@ bash install.sh --into <项目路径> --yes
 bash install.sh --into <项目路径> --persona hachiware --yes
 ```
 
-`--persona` 取 `persona/` 下文件名里的那一段（现有 `usagi`、`hachiware`），不写就是 `usagi`。名单由目录现取：加一个角色 = 新建一份 `<名字>-persona.md`，帮助文本、模板解析、盘点三处都自动跟上。
+`--persona` 取 `persona/` 下文件名里的那一段（现有 `usagi`、`hachiware`、`chiikawa`），不写就是 `usagi`。名单由目录现取：加一个角色 = 新建一份 `<名字>-persona.md`，帮助文本、模板解析、盘点三处都自动跟上。
 
 **为什么口吻必须写在人格里，不能写在服务说明里。** 服务是**用户级**登记的：一台机器一份，所有项目共用同一份 `initialize.instructions`。人格是**项目级**的：每个项目各注入一份。所以「这个项目演乌、那个项目演小八」只能靠人格那层实现——凡是随角色变的东西（自称、说话长短、口癖）都得落在人格里，服务说明只留跟角色无关的行为规则：世界边界、即兴规则、什么时候该查库。
 
@@ -254,7 +254,8 @@ library/
 ├── install.sh                   # 中立入口：检测、自检、调度适配器
 ├── persona/
 │   ├── usagi-persona.md         # 身份面：乌萨奇那份，直接注入的正文模板
-│   └── hachiware-persona.md     # 身份面：小八那份，同一个注入流程，--persona 选
+│   ├── hachiware-persona.md     # 身份面：小八那份，同一个注入流程，--persona 选
+│   └── chiikawa-persona.md      # 身份面：吉伊那份，同上
 ├── skill/                       # 方法面
 │   ├── SKILL.md                 # 正文按需加载；头部描述就是触发条件
 │   └── resident-trigger.md      # 备用：宿主不认 skill 时改贴这段
